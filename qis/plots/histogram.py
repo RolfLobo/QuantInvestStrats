@@ -158,9 +158,10 @@ def plot_histogram(df: Union[pd.DataFrame, pd.Series],
 
     if add_bar_at_peak:
         for idx, column in enumerate(df.columns):
-            data = ax.lines[idx].get_xydata()
-            xy_max = data[np.where(data[:, 1] == max(data[:, 1]))][0]
-            ax.vlines(xy_max[0], 0.0, xy_max[1], color=colors[idx], linestyle='dashed')
+            if idx < len(ax.lines):
+                data = ax.lines[idx].get_xydata()
+                xy_max = data[np.where(data[:, 1] == max(data[:, 1]))][0]
+                ax.vlines(xy_max[0], 0.0, xy_max[1], color=colors[idx], linestyle='dashed')
 
     norm_lable = None
     if add_norm_std_pdf or add_data_std_pdf:

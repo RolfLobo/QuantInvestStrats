@@ -317,6 +317,7 @@ def compute_returns_dict(prices: Union[pd.DataFrame, pd.Series],
         excess_return_pa = compounded_return_pa
 
     # Extract start and end values
+
     if isinstance(prices, pd.DataFrame):
         start_value = prices.iloc[0, :].to_numpy()
         end_value = prices.iloc[-1, :].to_numpy()
