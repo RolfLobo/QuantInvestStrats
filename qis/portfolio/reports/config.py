@@ -154,6 +154,7 @@ def fetch_factsheet_config_kwargs(factsheet_config: FactsheetConfig = FACTSHEET_
     kwargs = factsheet_config._asdict()
 
     if add_rates_data:
+        kwargs['perf_columns'] = PERF_COLUMNS
         kwargs['perf_stats_labels'] = (PerfStat.PA_RETURN, PerfStat.VOL, PerfStat.SHARPE_RF0, PerfStat.SHARPE_EXCESS,)
     else:
         kwargs['perf_columns'] = PERF_COLUMNS_RF0
