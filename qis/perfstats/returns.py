@@ -981,3 +981,158 @@ def df_price_ffill_between_nans(prices: Union[pd.Series, pd.DataFrame],
     if is_series_out:
         bfilled_data = bfilled_data.iloc[:, 0]
     return bfilled_data
+
+
+# =============================================================================
+# LEVERAGE ADJUSTMENT
+# =============================================================================
+# Paste these three functions into qis/perfstats/returns.py alongside
+# compute_excess_returns. The annualisation import at the top of that file
+# (from qis.utils.annualisation import infer_annualisation_factor_from_df)
+# is already present, so no additional imports are needed.
+
+
+def delever_returns(returns: Union[pd.Series, pd.DataFrame],
+                    leverage: float,
+                    financing_rate: Union[float, pd.Series] = 0.0,
+                    periods_per_year: int = None
+                    ) -> Union[pd.Series, pd.DataFrame]:
+    """Recover unlevered asset-level returns from levered portfolio returns.
+
+    Inverts the standard constant-leverage identity:
+
+        r_portfolio = (1 + L) * r_asset - L * r_financing
+
+    to recover:
+
+        r_asset = (r_portfolio + L * r_financing) / (1 + L)
+
+    Useful for comparing levered vehicles (BDCs, levered ETFs like TQQQ, levered
+    loan funds) to their unlevered analogues on a common-risk basis.
+
+    Args:
+        returns: Period returns of the levered portfolio (Series or DataFrame).
+        leverage: Leverage ratio L (debt / equity). For a 1.5x levered fund pass 0.5;
+            for a 3x ETF pass 2.0; for the typical BDC at 1.0x debt-to-equity pass 1.0.
+        financing_rate: Annualised financing rate. Pass a float for constant cost
+            (e.g. risk-free rate as a crude proxy), or a Series indexed on the same
+            frequency as returns for time-varying financing (recommended for accuracy).
+            Default 0.0 ignores financing — only correct if the portfolio earns the
+            financing rate on its borrowed capital, which is rarely the case.
+        periods_per_year: Annualisation factor used to convert the financing rate
+            to per-period. If None, inferred from the index frequency.
+
+    Returns:
+        De-levered returns matching the input shape.
+
+    Note:
+        This assumes constant leverage and a single-tier financing structure. Real
+        BDCs and levered funds have time-varying leverage, multiple debt tranches at
+        different rates, and credit spreads above the risk-free rate. For a precise
+        treatment, use the realised interest expense from filings rather than this
+        approximation.
+
+    Example:
+        >>> # De-lever OCSL using its actual weighted average debt rate of 6.1%
+        >>> ocsl_unlev = delever_returns(ocsl_returns, leverage=1.07,
+        ...                              financing_rate=0.061)
+    """
+    if periods_per_year is None:
+        periods_per_year = int(round(infer_annualisation_factor_from_df(
+            returns if isinstance(returns, pd.DataFrame) else returns.to_frame()
+        )))
+
+    # Convert financing rate to per-period
+    if isinstance(financing_rate, pd.Series):
+        # align to returns index, forward-fill to handle missing observations
+        rf_per_period = financing_rate.reindex(returns.index, method='ffill') / periods_per_year
+    else:
+        rf_per_period = float(financing_rate) / periods_per_year
+
+    return (returns + leverage * rf_per_period) / (1.0 + leverage)
+
+
+def lever_returns(returns: Union[pd.Series, pd.DataFrame],
+                  leverage: float,
+                  financing_rate: Union[float, pd.Series] = 0.0,
+                  periods_per_year: int = None
+                  ) -> Union[pd.Series, pd.DataFrame]:
+    """Apply constant leverage to an unlevered asset return series.
+
+    Forward direction of ``delever_returns``:
+
+        r_portfolio = (1 + L) * r_asset - L * r_financing
+
+    Useful for stress-testing unlevered strategies under hypothetical leverage,
+    or for comparing managed-account performance against a levered benchmark.
+
+    Args:
+        returns: Period returns of the unlevered asset (Series or DataFrame).
+        leverage: Leverage ratio L (debt / equity).
+        financing_rate: Annualised financing rate (float or Series).
+        periods_per_year: Annualisation factor. If None, inferred from index.
+
+    Returns:
+        Levered returns matching the input shape.
+
+    Example:
+        >>> # Show what GCF would look like at 1x leverage with BDC-like financing
+        >>> gcf_levered = lever_returns(gcf_returns, leverage=1.0,
+        ...                             financing_rate=0.061)
+    """
+    if periods_per_year is None:
+        periods_per_year = int(round(infer_annualisation_factor_from_df(
+            returns if isinstance(returns, pd.DataFrame) else returns.to_frame()
+        )))
+
+    if isinstance(financing_rate, pd.Series):
+        rf_per_period = financing_rate.reindex(returns.index, method='ffill') / periods_per_year
+    else:
+        rf_per_period = float(financing_rate) / periods_per_year
+
+    return (1.0 + leverage) * returns - leverage * rf_per_period
+
+
+def implied_leverage(levered_returns: Union[pd.Series, pd.DataFrame],
+                     unlevered_returns: pd.Series,
+                     ) -> Union[float, pd.Series]:
+    """Estimate the implicit leverage ratio between two return series via OLS.
+
+    Regresses levered returns on unlevered returns and extracts the slope, which
+    under the constant-leverage model equals (1 + L). Useful for inferring the
+    effective leverage of a vehicle when not explicitly disclosed.
+
+    Args:
+        levered_returns: Returns of the levered vehicle (Series or DataFrame).
+        unlevered_returns: Returns of the unlevered analogue (Series).
+
+    Returns:
+        Implied leverage ratio L = slope - 1. For Series input, returns a float;
+        for DataFrame input, returns a Series indexed by column name.
+
+    Note:
+        The estimate is contaminated by any non-leverage differences between the
+        two vehicles (security selection, sector tilts, financing spread). Use
+        with caution and only when both vehicles target the same underlying exposure.
+
+    Example:
+        >>> # Estimate OCSL's implied leverage vs Oaktree GCF
+        >>> L = implied_leverage(ocsl_returns, gcf_returns)
+        >>> print(f"Implied leverage: {L:.2f}x")
+    """
+    if isinstance(levered_returns, pd.Series):
+        joint = pd.concat([levered_returns, unlevered_returns], axis=1).dropna()
+        joint.columns = ['y', 'x']
+        if len(joint) < 10:
+            return np.nan
+        slope = np.cov(joint['x'], joint['y'], ddof=1)[0, 1] / np.var(joint['x'], ddof=1)
+        return float(slope - 1.0)
+
+    if isinstance(levered_returns, pd.DataFrame):
+        return pd.Series(
+            {col: implied_leverage(levered_returns[col], unlevered_returns)
+             for col in levered_returns.columns},
+            name='implied_leverage',
+        )
+
+    raise TypeError(f"levered_returns must be Series or DataFrame, got {type(levered_returns)}")

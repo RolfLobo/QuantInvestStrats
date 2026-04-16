@@ -42,6 +42,11 @@ from qis.perfstats.perf_stats import (
     compute_drawdowns_stats_table
 )
 
+from qis.perfstats.unsmoothing import (
+    unsmooth_returns_ar1_ewma,
+    compute_ar1_unsmoothed_prices,
+    unsmooth_returns_glm)
+
 from qis.perfstats.regime_classifier import (
     BenchmarkReturnsQuantilesRegime,
     BenchmarkVolsQuantilesRegime,
@@ -79,7 +84,10 @@ from qis.perfstats.returns import (
     prices_to_scaled_nav,
     to_total_returns,
     to_zero_first_nonnan_returns,
-    df_price_ffill_between_nans
+    df_price_ffill_between_nans,
+    delever_returns,
+    lever_returns,
+    implied_leverage
 )
 
 from qis.perfstats.timeseries_bfill import (
