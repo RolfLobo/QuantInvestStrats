@@ -198,9 +198,9 @@ def compute_aggregate_scores(scores: List[pd.Series],
                 norm = 1.0 / np.sqrt(n)
             else:
                 norm = 1 / n
-            joint_avg = norm * np.nansum(joint, axis=1)
+            joint_avg = norm * np.nansum(joint.to_numpy(dtype=float), axis=1)
         else:
-            joint_avg = np.nanmean(joint, axis=1)
+            joint_avg = np.nanmean(joint.to_numpy(dtype=float), axis=1)
     joint_score = pd.Series(joint_avg, index=joint.index).sort_values(ascending=False)
     return joint_score
 

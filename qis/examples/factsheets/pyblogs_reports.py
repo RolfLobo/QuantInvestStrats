@@ -48,7 +48,7 @@ def generate_volparity_multi_strategy(prices: pd.DataFrame,
     portfolio_datas = []
     for span in spans:
         ra_returns, weights, ewm_vol = qis.compute_ra_returns(returns=returns, span=span, vol_target=vol_target)
-        weights = weights.divide(weights.sum(1), axis=0)
+        weights = weights.divide(weights.sum(axis=1), axis=0)
         portfolio_data = qis.backtest_model_portfolio(prices=prices,
                                                       weights=time_period.locate(weights),
                                                       rebalancing_costs=rebalancing_costs,

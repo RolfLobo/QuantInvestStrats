@@ -15,7 +15,6 @@ import qis.utils.struct_ops as sop
 import qis.utils.df_groups as dfg
 import qis.perfstats.returns as ret
 import qis.perfstats.perf_stats as rpt
-import qis.perfstats.regime_classifier as rcl
 # plots
 import qis.plots.time_series as pts
 import qis.plots.derived.prices as ppd
@@ -282,8 +281,8 @@ class MultiPortfolioData:
         benchmark_ticker = self.portfolio_datas[benchmark_idx].ticker
 
         # compute stats
-        total_strategy_perf = strategy_pnl.cumsum(0).iloc[-1, :].rename(f"{strategy_ticker} total perf")
-        total_benchmark_perf = benchmark_pnl.cumsum(0).iloc[-1, :].rename(f"{benchmark_ticker} total perf")
+        total_strategy_perf = strategy_pnl.cumsum(axis=0).iloc[-1, :].rename(f"{strategy_ticker} total perf")
+        total_benchmark_perf = benchmark_pnl.cumsum(axis=0).iloc[-1, :].rename(f"{benchmark_ticker} total perf")
         total_diff = total_strategy_perf.subtract(total_benchmark_perf).rename(
             f"{strategy_ticker}-{benchmark_ticker} total perf")
 
@@ -291,10 +290,10 @@ class MultiPortfolioData:
 
         tre_table = pd.concat([total_diff, tre,
                                total_strategy_perf, total_benchmark_perf,
-                               annualization_factor * strategy_turnover.mean(0).rename(f"{strategy_ticker} an turnover"),
-                               annualization_factor * benchmark_turnover.mean(0).rename(f"{benchmark_ticker} an turnover"),
-                               annualization_factor * strategy_cost.mean(0).rename(f"{strategy_ticker} an cost"),
-                               annualization_factor * benchmark_cost.mean(0).rename(f"{benchmark_ticker} an cost"),
+                               annualization_factor * strategy_turnover.mean(axis=0).rename(f"{strategy_ticker} an turnover"),
+                               annualization_factor * benchmark_turnover.mean(axis=0).rename(f"{benchmark_ticker} an turnover"),
+                               annualization_factor * strategy_cost.mean(axis=0).rename(f"{strategy_ticker} an cost"),
+                               annualization_factor * benchmark_cost.mean(axis=0).rename(f"{benchmark_ticker} an cost"),
                                ], axis=1)
 
         return tre_table

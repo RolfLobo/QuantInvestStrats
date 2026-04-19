@@ -179,7 +179,7 @@ class LinearModel:
         exposures = self.x
         attribution = exposures.multiply(factor_betas.shift(1))
         if add_total:
-            total = attribution.sum(1).rename('Total')
+            total = attribution.sum(axis=1).rename('Total')
             attribution = pd.concat([total, attribution], axis=1)
         return attribution
 

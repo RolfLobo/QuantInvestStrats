@@ -786,7 +786,12 @@ def compute_ewm_newey_west_vol(data: Union[pd.DataFrame, pd.Series, np.ndarray],
             nw_adjustment += (1.0-m/(num_lags+1))*ewm_m
 
         ewm_nw = ewm0 + nw_adjustment
-        nw_ratio = np.divide(ewm_nw, ewm0, where=ewm0 > 0.0)
+        # NumPy 2.x: explicit out= so masked positions (ewm0<=0) are deterministic nan.
+        nw_ratio = np.divide(
+            ewm_nw, ewm0,
+            out=np.full_like(ewm_nw, np.nan, dtype=float),
+            where=ewm0 > 0.0,
+        )
         nw_ratio = np.where(nw_ratio > 0.0, nw_ratio, 1.0)
 
     if warmup_period is not None:   # set to nan first nonnan in warmup_period
@@ -990,7 +995,12 @@ def compute_ewm_cross_xy(x_data: Union[pd.DataFrame, pd.Series, np.ndarray],
                               init_value=init_value_x2,
                               nan_backfill=nan_backfill)
         divisor = x_var
-        cross_xy = np.divide(xy_covar, divisor, where=np.isclose(divisor, 0.0) == False)
+        # NumPy 2.x: explicit out= so masked positions (divisor≈0) are deterministic nan.
+        cross_xy = np.divide(
+            xy_covar, divisor,
+            out=np.full_like(xy_covar, np.nan, dtype=float),
+            where=~np.isclose(divisor, 0.0),
+        )
 
     elif cross_xy_type == CrossXyType.CORR:
         x2 = np.square(x)
@@ -1000,7 +1010,12 @@ def compute_ewm_cross_xy(x_data: Union[pd.DataFrame, pd.Series, np.ndarray],
         init_value_y2 = set_init_dim1(data=y2, init_type=var_init_type)
         y_var = ewm_recursion(a=y2, span=span, ewm_lambda=ewm_lambda, init_value=init_value_y2, nan_backfill=nan_backfill)
         divisor = np.sqrt(np.multiply(x_var, y_var))
-        cross_xy = np.divide(xy_covar, divisor, where=np.isclose(divisor, 0.0) == False)
+        # NumPy 2.x: explicit out= so masked positions (divisor≈0) are deterministic nan.
+        cross_xy = np.divide(
+            xy_covar, divisor,
+            out=np.full_like(xy_covar, np.nan, dtype=float),
+            where=~np.isclose(divisor, 0.0),
+        )
     else:
         raise TypeError(f"unknown cross_xy_type = {cross_xy_type}")
 
@@ -1074,7 +1089,13 @@ def compute_ewm_beta_alpha_forecast(x_data: Union[pd.DataFrame, pd.Series],
                           init_value=set_init_dim1(data=x2, init_type=init_type))
 
     # compute beta
-    beta_xy = np.divide(xy_covar, x_var, where=np.isclose(x_var, 0.0) == False)
+    # NumPy 2.x: explicit out= so masked positions (x_var≈0) are deterministic nan,
+    # not uninitialized memory. This was the original crash site from the OP traceback.
+    beta_xy = np.divide(
+        xy_covar, x_var,
+        out=np.full_like(xy_covar, np.nan, dtype=float),
+        where=~np.isclose(x_var, 0.0),
+    )
 
     # alpha and prediction assuming 1-d factor model
     y_prediction0 = beta_xy * x
@@ -1105,8 +1126,14 @@ def compute_ewm_beta_alpha_forecast(x_data: Union[pd.DataFrame, pd.Series],
     y_var0 = y_data.subtract(compute_ewm(data=y_data, span=span, ewm_lambda=ewm_lambda, nan_backfill=nan_backfill))
     y_var = an * ewm_recursion(a=np.square(y_var0.to_numpy()), span=span, ewm_lambda=ewm_lambda,
                                init_value=np.zeros(len(y_data.columns)), nan_backfill=nan_backfill)
-    ewm_r2 = 1.0 - np.divide(resid_var, y_var, where=np.greater(y_var, 0.0))
-    ewm_r2 = np.clip(ewm_r2, a_min=0.0, a_max=1.0)
+    # NumPy 2.x: work on ndarray with explicit out=; rebuild frame afterwards.
+    resid_var_np = resid_var.to_numpy(dtype=float) if isinstance(resid_var, pd.DataFrame) else np.asarray(resid_var, dtype=float)
+    ewm_r2_np = 1.0 - np.divide(
+        resid_var_np, y_var,
+        out=np.full_like(resid_var_np, np.nan),
+        where=np.greater(y_var, 0.0),
+    )
+    ewm_r2 = np.clip(ewm_r2_np, a_min=0.0, a_max=1.0)
     ewm_r2 = pd.DataFrame(data=ewm_r2, index=y_data.index, columns=y_data.columns)
 
     return beta_xy, alpha, y_prediction, x_var, resid_var, ewm_r2
@@ -1131,7 +1158,12 @@ def compute_ewm_alpha_r2_given_prediction(y_data: pd.DataFrame,
     y_var = ewm_recursion(a=np.square(y_var0.to_numpy()), span=span, ewm_lambda=ewm_lambda,
                           init_value=np.zeros(len(y_data.columns)), nan_backfill=nan_backfill)
 
-    ewm_r2 = 1.0 - np.divide(resid_var, y_var, where=np.greater(y_var, 0.0))
+    # NumPy 2.x: explicit out= so masked positions (y_var<=0) are deterministic nan.
+    ewm_r2 = 1.0 - np.divide(
+        resid_var, y_var,
+        out=np.full_like(resid_var, np.nan, dtype=float),
+        where=np.greater(y_var, 0.0),
+    )
     ewm_r2 = np.clip(ewm_r2, a_min=0.0, a_max=1.0)
     ewm_r2 = pd.DataFrame(data=ewm_r2, index=y_data.index, columns=y_data.columns)
 
@@ -1176,9 +1208,13 @@ def compute_ewm_sharpe(returns: pd.DataFrame,
                                 init_value=initial_var,
                                 nan_backfill=NanBackfill.ZERO_FILL)
         ewm_vol = np.sqrt(ewm_var)
-        sharpe = pd.DataFrame(data=san * np.divide(ewm_mean, ewm_vol, where=np.greater(ewm_vol, 0.0)),
-                              index=returns.index,
-                              columns=returns.columns)
+        # NumPy 2.x: explicit out= so masked positions (ewm_vol<=0) are deterministic nan.
+        sharpe_np = san * np.divide(
+            ewm_mean, ewm_vol,
+            out=np.full_like(ewm_mean, np.nan, dtype=float),
+            where=np.greater(ewm_vol, 0.0),
+        )
+        sharpe = pd.DataFrame(data=sharpe_np, index=returns.index, columns=returns.columns)
     else:
         raise ValueError(f"norm_type={norm_type} not implemented")
 

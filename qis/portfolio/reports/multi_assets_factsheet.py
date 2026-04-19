@@ -311,7 +311,7 @@ class MultiAssetsReport:
         else:
             factor_alpha_title = factor_alpha_title or f"Cumulative alpha using {factor_beta_span}-span rolling Beta of {freq_beta}-freq returns to {benchmark}"
 
-        qis.plot_time_series(df=factor_alpha.cumsum(0),
+        qis.plot_time_series(df=factor_alpha.cumsum(axis=0),
                              title=factor_alpha_title,
                              ax=ax,
                              **qis.update_kwargs(kwargs=kwargs, new_kwargs=dict(var_format='{:,.0%}',

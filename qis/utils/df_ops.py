@@ -88,7 +88,12 @@ def norm_df_by_ax_mean(data: Union[np.ndarray, pd.DataFrame],
         a = a - mean
 
     std = np.nanstd(a=a, axis=axis, ddof=1, keepdims=True)
-    norm_data = np.divide(a, std, where=np.greater(std, 0.0))
+    # NumPy 2.x: explicit nan-filled `out` for masked positions (std <= 0).
+    norm_data = np.divide(
+        a, std,
+        out=np.full_like(a, np.nan, dtype=float),
+        where=np.greater(std, 0.0),
+    )
 
     if isinstance(data, pd.DataFrame):
         norm_data = pd.DataFrame(data=norm_data, columns=data.columns, index=data.index)

@@ -51,7 +51,7 @@ def generate_volparity_portfolio(prices: pd.DataFrame,
     ra_returns, weights, ewm_vol = qis.compute_ra_returns(returns=qis.to_returns(prices=prices, is_log_returns=True),
                                                           span=span,
                                                           vol_target=vol_target)
-    weights = weights.divide(weights.sum(1), axis=0)
+    weights = weights.divide(weights.sum(axis=1), axis=0)
 
     if time_period is not None:
         weights = time_period.locate(weights)

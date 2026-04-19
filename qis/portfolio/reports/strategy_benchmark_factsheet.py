@@ -408,9 +408,9 @@ def generate_strategy_benchmark_active_perf_plt(multi_portfolio_data: MultiPortf
                                                          time_period=time_period,
                                                          is_exclude_interaction_term=True)
 
-    datas = {'Active total return (Brinson attribution)': (active_total.cumsum(0), fig.add_subplot(gs[0, 1])),
-             'Asset class allocation return': (grouped_allocation_return.cumsum(0), fig.add_subplot(gs[1, 1])),
-             'Instrument selection return': (grouped_selection_return.cumsum(0), fig.add_subplot(gs[2, 1]))}
+    datas = {'Active total return (Brinson attribution)': (active_total.cumsum(axis=0), fig.add_subplot(gs[0, 1])),
+             'Asset class allocation return': (grouped_allocation_return.cumsum(axis=0), fig.add_subplot(gs[1, 1])),
+             'Instrument selection return': (grouped_selection_return.cumsum(axis=0), fig.add_subplot(gs[2, 1]))}
     for key, (df, ax) in datas.items():
         legend_labels = [column + ', sum=' + '{:.1%}'.format(df[column].iloc[-1]) for column in df.columns]
         qis.plot_time_series(df=df,

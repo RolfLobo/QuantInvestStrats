@@ -128,7 +128,11 @@ def map_signal_to_weight(signals: pd.DataFrame,
         scale_positive = 1.5625 * scale / np.log(tail_level / (tail_level - slope_right))
         s_negative = - tail_level * (1.0 - np.exp(-np.square(x - loc) / scale_negative))
         s_positive = tail_level * (1.0 - np.exp(-np.square(x - loc) / scale_positive))
-        weight = np.where(np.less(x, loc, where=np.isfinite(x)), s_negative, s_positive)
+        # NumPy 2.x: comparison with `where=` needs `out=` so masked positions (non-finite x)
+        # are deterministic False, causing the outer np.where to select s_positive for them.
+        finite_mask = np.isfinite(x)
+        less_mask = np.less(x, loc, out=np.zeros_like(finite_mask, dtype=bool), where=finite_mask)
+        weight = np.where(less_mask, s_negative, s_positive)
 
         if tail_decay_right is not None and tail_decay_left is not None:  # take min(loc,0.0) and max(loc, 0.0)
             if isinstance(tail_decay_right, np.ndarray) and tail_decay_right.shape[0] != x.shape[1]:

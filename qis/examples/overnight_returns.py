@@ -33,9 +33,9 @@ def plot_split_returns(ticker: str = 'SPY',
     if is_check_total:
         cum_performance = pd.concat([close_to_close_return.rename('Close-to-Close'),
                                      overnight_return.add(intraday_return).rename('Overnight+Intraday')
-                                     ], axis=1).cumsum(0)
+                                     ], axis=1).cumsum(axis=0)
     else:
-        cum_performance = pd.concat([overnight_return, intraday_return], axis=1).cumsum(0)
+        cum_performance = pd.concat([overnight_return, intraday_return], axis=1).cumsum(axis=0)
 
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(15, 8), tight_layout=True)

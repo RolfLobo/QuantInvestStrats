@@ -258,7 +258,7 @@ def compute_portfolio_independent_var_by_ac(prices: pd.DataFrame,
                                        agg_func=dfa.nansum,
                                        total_column=total_column)
     else:
-        ac_vars = instrument_vars.sum(1)
+        ac_vars = instrument_vars.sum(axis=1)
 
     if time_period is not None:
         instrument_vars = time_period.locate(instrument_vars)

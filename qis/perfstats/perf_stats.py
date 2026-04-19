@@ -568,7 +568,12 @@ def compute_te_ir_errors(return_diffs: pd.DataFrame) -> Tuple[pd.Series, pd.Seri
     vol_dt = np.sqrt(infer_annualisation_factor_from_df(return_diffs))
     avg = np.nanmean(return_diffs, axis=0)
     vol = np.nanstd(return_diffs, axis=0, ddof=1)
-    ir = vol_dt * np.divide(avg, vol, where=np.greater(vol, 0.0))
+    # NumPy 2.x: explicit out= buffer so masked positions (vol==0) are deterministic nan.
+    ir = vol_dt * np.divide(
+        avg, vol,
+        out=np.full_like(avg, np.nan, dtype=float),
+        where=np.greater(vol, 0.0),
+    )
     te = pd.Series(vol_dt * vol, index=return_diffs.columns, name=PerfStat.TE.to_str())
     ir = pd.Series(ir, index=return_diffs.columns, name=PerfStat.IR.to_str())
     return te, ir
@@ -683,11 +688,11 @@ def compute_max_current_drawdown(prices: Union[pd.DataFrame, pd.Series]
     """
     max_dd_data = compute_rolling_drawdowns(prices=prices)
     if isinstance(prices, pd.DataFrame):
-        max_dds = np.min(max_dd_data.to_numpy(), axis=0)
+        max_dds = np.nanmin(max_dd_data.to_numpy(), axis=0)
         current_dds = max_dd_data.iloc[-1, :].to_numpy()
     else:
         # Series case: return scalars (not arrays) to match the actual return shape.
-        max_dds = float(np.min(max_dd_data.to_numpy()))
+        max_dds = float(np.nanmin(max_dd_data.to_numpy()))
         current_dds = float(max_dd_data.iloc[-1])
     return max_dds, current_dds
 

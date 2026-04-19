@@ -76,20 +76,33 @@ def filter_outliers(data: Union[pd.DataFrame, pd.Series, np.ndarray],
     # imnitial replacement is using nans
     nan_replacement = np.full_like(orig_data, np.nan, dtype=np.float64)
 
+    # NumPy 2.x: comparison/arithmetic ufuncs with `where=` need an explicit `out=` buffer,
+    # otherwise masked positions contain uninitialized memory (random bools for comparisons).
+    # For comparisons used inside np.where(...) we want masked positions to be False so the
+    # outer np.where selects `clean_data` (which already carries nan in those positions).
+    def _greater_masked(a, b, mask):
+        return np.greater(a, b, out=np.zeros_like(mask, dtype=bool), where=mask)
+
+    def _less_masked(a, b, mask):
+        return np.less(a, b, out=np.zeros_like(mask, dtype=bool), where=mask)
+
     # remove absolute outliers
     if outlier_policy.abs_ceil is not None:
-        clean_data = np.where(np.greater(clean_data, outlier_policy.abs_ceil, where=non_nan_cond),
+        clean_data = np.where(_greater_masked(clean_data, outlier_policy.abs_ceil, non_nan_cond),
                               nan_replacement, clean_data)
     if outlier_policy.abs_floor is not None:
-        clean_data = np.where(np.less(clean_data, outlier_policy.abs_floor, where=non_nan_cond),
+        clean_data = np.where(_less_masked(clean_data, outlier_policy.abs_floor, non_nan_cond),
                               nan_replacement, clean_data)
 
     # now apply log transform
     if outlier_policy.is_log_transform:
         if outlier_policy.abs_floor is None:
             raise TypeError('is_log_transform must be applied with abs_floor > 0')
-        log_cond = np.greater(clean_data, 0.0, where=non_nan_cond)
-        clean_data = np.log(clean_data, where=log_cond)
+        log_cond = _greater_masked(clean_data, 0.0, non_nan_cond)
+        # np.log with explicit nan-filled out= for masked positions.
+        clean_data = np.log(clean_data,
+                            out=np.full_like(clean_data, np.nan, dtype=float),
+                            where=log_cond)
     else:
         log_cond = None
 
@@ -99,26 +112,32 @@ def filter_outliers(data: Union[pd.DataFrame, pd.Series, np.ndarray],
         nan_std = np.nanstd(clean_data, axis=0)
 
         if outlier_policy.std_abs_ceil is not None:
-            ceil = np.add(nan_mean, nan_std*outlier_policy.std_abs_ceil, where=non_nan_cond)
-            clean_data = np.where(np.greater(clean_data, ceil, where=non_nan_cond), nan_replacement, clean_data)
+            # nan_mean/nan_std are 1-D; broadcast with 2-D mask produces 2-D result — keep existing semantics.
+            ceil_broadcast = np.broadcast_to(nan_mean + nan_std * outlier_policy.std_abs_ceil, non_nan_cond.shape)
+            ceil = np.where(non_nan_cond, ceil_broadcast, np.nan)
+            clean_data = np.where(_greater_masked(clean_data, ceil, non_nan_cond), nan_replacement, clean_data)
 
         if outlier_policy.std_abs_floor is not None:
-            floor = np.add(nan_mean, nan_std*outlier_policy.std_abs_floor, where=non_nan_cond)
-            clean_data = np.where(np.less(clean_data, floor, where=non_nan_cond), nan_replacement, clean_data)
+            floor_broadcast = np.broadcast_to(nan_mean + nan_std * outlier_policy.std_abs_floor, non_nan_cond.shape)
+            floor = np.where(non_nan_cond, floor_broadcast, np.nan)
+            clean_data = np.where(_less_masked(clean_data, floor, non_nan_cond), nan_replacement, clean_data)
 
     # now rolling ewm outliers
     if outlier_policy.std_ewm_ceil is not None or outlier_policy.std_ewm_floor is not None:
 
         ewm_mean, score = compute_ewm_score(data=clean_data, ewm_lambda=outlier_policy.ewm_lambda)
         if outlier_policy.std_ewm_ceil is not None:
-            clean_data = np.where(np.greater(score, outlier_policy.std_ewm_ceil, where=non_nan_cond),
+            clean_data = np.where(_greater_masked(score, outlier_policy.std_ewm_ceil, non_nan_cond),
                                   nan_replacement, clean_data)
 
         if outlier_policy.std_ewm_floor is not None:
-            clean_data = np.where(np.less(score, outlier_policy.std_ewm_floor, where=non_nan_cond),
+            clean_data = np.where(_less_masked(score, outlier_policy.std_ewm_floor, non_nan_cond),
                                   nan_replacement, clean_data)
     if outlier_policy.is_log_transform:
-        clean_data = np.exp(clean_data, where=log_cond)
+        # Inverse of the earlier log: exp on the same mask, with explicit out=.
+        clean_data = np.exp(clean_data,
+                            out=np.full_like(clean_data, np.nan, dtype=float),
+                            where=log_cond)
 
     # implemented replacement type is EWMA mean
     if outlier_policy.nan_replacement_type == ReplacementType.EWMA_MEAN:
@@ -188,7 +207,13 @@ def compute_ewm_score(data: np.ndarray,
     if is_clip:  # remove small values below 1 _ std quantile
         ewm_vol = np.clip(a=ewm_vol, a_min=np.nanquantile(ewm_vol, clip_quantile), a_max=None)
     non_nan_cond = np.isfinite(data)
-    score = np.divide(np.subtract(data, ewm_mean), ewm_vol, where=non_nan_cond)
+    # NumPy 2.x: explicit out= so masked positions are deterministic nan.
+    diff = np.subtract(data, ewm_mean)
+    score = np.divide(
+        diff, ewm_vol,
+        out=np.full_like(diff, np.nan, dtype=float),
+        where=non_nan_cond,
+    )
     return ewm_mean, score
 
 
@@ -305,66 +330,3 @@ def ewm_winsdor_markovian_score(a: np.ndarray,
         clean_a[t] = clean_a_
 
     return clean_a, ewm, ewm2, score
-
-
-class LocalTests(Enum):
-    TEST1 = 1
-    MARKOVIAN_WINDSOR = 2
-
-
-def run_local_test(local_test: LocalTests):
-    """Run local tests for development and debugging purposes.
-
-    These are integration tests that download real data and generate reports.
-    Use for quick verification during development.
-    """
-
-    np.random.seed(2) #freeze seed
-
-    import qis as qis
-
-    dates = pd.date_range(start='12/31/2018', end='12/31/2019', freq='B')
-    n = 2
-
-    data = pd.DataFrame(data=np.random.standard_t(df=2, size=(len(dates), n)),
-                        index=dates,
-                        columns=['x'+str(m+1) for m in range(n)])
-    # data = pd.Series(data=data_np, index=dates, name='data')
-
-    if local_test == LocalTests.TEST1:
-        winsor_data = ewm_insample_winsorising(data=data,
-                                               ewm_lambda=0.94,
-                                               nan_replacement_type=ReplacementType.EWMA_MEAN,
-                                               quantile_cut=0.05)
-
-        winsor_data.columns = [x + ' winsor' for x in data.columns]
-
-        plot_data = pd.concat([data, winsor_data], axis=1)
-        title = 'Data Winsor'
-
-        qis.plot_time_series(df=plot_data,
-                             title=title,
-                             legend_loc='upper left',
-                             legend_stats=qis.LegendStats.AVG,
-                             last_label=qis.LastLabel.AVERAGE_VALUE,
-                             trend_line=qis.TrendLine.AVERAGE,
-                             var_format='{:.2f}')
-
-    elif local_test == LocalTests.MARKOVIAN_WINDSOR:
-        clean_x, ewm, ewm2, score = ewm_winsdor_markovian_score(a=data.to_numpy(), span=7,
-                                                                init_value=0.0,
-                                                                init_var=0.1*np.ones(len(data.columns)))
-        clean_x = pd.DataFrame(clean_x, index=dates, columns=[x + ' winsor' for x in data.columns])
-        plot_data = pd.concat([data, clean_x], axis=1)
-        qis.plot_time_series(df=plot_data,
-                             title='Windsor',
-                             legend_loc='upper left',
-                             legend_stats=qis.LegendStats.AVG_STD_LAST,
-                             var_format='{:.2f}')
-
-    plt.show()
-
-
-if __name__ == '__main__':
-
-    run_local_test(local_test=LocalTests.MARKOVIAN_WINDSOR)

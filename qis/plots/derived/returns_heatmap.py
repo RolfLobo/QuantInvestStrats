@@ -278,6 +278,7 @@ def plot_periodic_returns_table(prices: pd.DataFrame,
         vline_columns = [len(data.index) - 1]
     else:
         vline_columns = None
+    data = data.replace({0.0: np.nan})
     fig = plot_heatmap(df=data,
                        vline_columns=vline_columns,
                        transpose=transpose,

@@ -17,19 +17,25 @@ import qis.plots.time_series as pts
 from qis.plots.derived.prices import plot_prices
 
 # internal
-import qis.models.stats.bootstrap as bts
+from qis.models.stats.bootstrap import (bootstrap_data,
+                                        bootstrap_ar_process,
+                                        bootstrap_price_data,
+                                        compute_ar_residuals,
+                                        bootstrap_price_fundamental_data,
+                                        BootsrapType,
+                                        BootsrapOutput)
 
 
 def plot_price_bootrstrap(prices: pd.Series,
                           seed: int = 1,
                           block_size: int = 20,
                           **kwargs):
-    bt_data = bts.bootstrap_price_data(prices=prices,
-                                       bootsrap_type=bts.BootsrapType.STATIONARY,
-                                       bootsrap_output=bts.BootsrapOutput.SERIES_TO_DF,
-                                       index_length=len(prices),
-                                       seed=seed,
-                                       block_size=block_size)
+    bt_data = bootstrap_price_data(prices=prices,
+                                   bootsrap_type=BootsrapType.STATIONARY,
+                                   bootsrap_output=BootsrapOutput.SERIES_TO_DF,
+                                   index_length=len(prices),
+                                   seed=seed,
+                                   block_size=block_size)
     bt_data.index = prices.index
     all_data = pd.concat([prices, bt_data], axis=1)
     plot_prices(all_data, **kwargs)
@@ -37,18 +43,18 @@ def plot_price_bootrstrap(prices: pd.Series,
 
 def plot_ew_index_bootrstrap(prices: pd.DataFrame):
     log_returns = ret.to_returns(prices=prices, is_log_returns=True, drop_first=True)
-    bt_data = bts.bootstrap_data(data=log_returns,
-                                 bootsrap_type=bts.BootsrapType.STATIONARY,
-                                 bootsrap_output=bts.BootsrapOutput.DF_TO_LIST_ARRAYS,
-                                 index_length=len(prices))
+    bt_data = bootstrap_data(data=log_returns,
+                             bootsrap_type=BootsrapType.STATIONARY,
+                             bootsrap_output=BootsrapOutput.DF_TO_LIST_ARRAYS,
+                             index_length=len(prices))
     ew_data = []
     for idx, sample in enumerate(bt_data):
-        ew_data.append(pd.Series(np.nanmean(sample, axis=1), name=f"path_{idx+1}"))
+        ew_data.append(pd.Series(np.nanmean(sample, axis=1), name=f"path_{idx + 1}"))
     ew_data = pd.concat(ew_data, axis=1)
     ew_data.index = prices.index
     ew_prices = ret.returns_to_nav(ew_data)
     original = ret.returns_to_nav(
-        ret.to_returns(prices=prices, is_log_returns=True).mean(1)).rename('realized')
+        ret.to_returns(prices=prices, is_log_returns=True).mean(axis=1)).rename('realized')
     all_data = pd.concat([original, ew_prices], axis=1)
     plot_prices(all_data)
 
@@ -64,7 +70,7 @@ def estimate_ar_model(data: pd.Series,
     prediction = np.zeros(len(data.index))
     prediction[0] = data[0]
     for t in np.arange(1, len(data.index)):
-        prediction[t] = beta*data[t-1] + intercept
+        prediction[t] = beta * data[t - 1] + intercept
 
     prediction = pd.Series(prediction, index=data.index, name='prediction')
     joint_data = pd.concat([data, prediction], axis=1)
@@ -92,13 +98,12 @@ def plot_ar_bootstrap(data: pd.Series,
                       seed: int = 2,
                       **kwargs
                       ):
-
-    df_bts = bts.bootstrap_ar_process(data=data,
-                                      bootsrap_output=bts.BootsrapOutput.SERIES_TO_DF,
-                                      index_length=len(data.index),
-                                      num_samples=num_samples,
-                                      seed=seed)
-    df_bts.index = data.index
+    df_bts = bootstrap_ar_process(data=data,
+                                  bootsrap_output=BootsrapOutput.SERIES_TO_DF,
+                                  index_length=len(data.index),
+                                  num_samples=num_samples,
+                                  seed=seed)
+    df_index = data.index
     joint_data = pd.concat([data.rename('realized'), df_bts], axis=1)
     pts.plot_time_series(df=joint_data,
                          legend_stats=pts.LegendStats.AVG_STD,
@@ -115,12 +120,12 @@ def plot_joint_bootstrap():
     prices, fundamental_data = prices.iloc[:, 0], fundamental_data.iloc[:, 0]
     price_datas = {'price': prices.iloc[:, 0]}
     fundamental_datas = {'fundamental': fundamental_data}
-    bootstrap_prices, bootstrap_fundamentals = bts.bootstrap_price_fundamental_data(price_datas=price_datas,
-                                                                                    fundamental_datas=fundamental_datas,
-                                                                                    bootsrap_output=bts.BootsrapOutput.SERIES_TO_DF,
-                                                                                    index_length=len(prices.index),
-                                                                                    num_samples=10,
-                                                                                    block_size=10)
+    bootstrap_prices, bootstrap_fundamentals = bootstrap_price_fundamental_data(price_datas=price_datas,
+                                                                                fundamental_datas=fundamental_datas,
+                                                                                bootsrap_output=BootsrapOutput.SERIES_TO_DF,
+                                                                                index_length=len(prices.index),
+                                                                                num_samples=10,
+                                                                                block_size=10)
     bootstrap_prices = bootstrap_prices['price']
     bootstrap_prices.index = prices.index
     bootstrap_fundamentals = bootstrap_fundamentals['fundamental']
@@ -137,8 +142,8 @@ def plot_joint_bootstrap():
                              first_color_fixed=True,
                              ax=axs[0])
         plot_prices(prices=join_price_data,
-                        is_log=True,
-                        ax=axs[1])
+                    is_log=True,
+                    ax=axs[1])
 
 
 def get_test_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -156,12 +161,14 @@ def get_test_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 
 class LocalTests(Enum):
-    PLOT_PRICE_BOOTSTRAP = 1
-    PLOT_EW_INDEX = 2
-    FIT_AR_MODEL = 3
-    AR_RESIDUALS = 4
-    PLOT_AR_BOOTSTRAP = 5
-    PLOT_JOINT_BOOTSTRAP = 6
+    DATA_LIST = 1
+    DATA_SERIES = 2
+    PLOT_PRICE_BOOTSTRAP = 3
+    PLOT_EW_INDEX = 4
+    FIT_AR_MODEL = 5
+    AR_RESIDUALS = 6
+    PLOT_AR_BOOTSTRAP = 7
+    PLOT_JOINT_BOOTSTRAP = 8
 
 
 def run_local_test(local_test: LocalTests):
@@ -174,7 +181,30 @@ def run_local_test(local_test: LocalTests):
     from qis.test_data import load_etf_data
     prices = load_etf_data().dropna()
 
-    if local_test == LocalTests.PLOT_PRICE_BOOTSTRAP:
+    # simulate t*n data
+    dates = pd.date_range(start='12/31/2018', end='12/31/2019', freq='B')
+    n = 3
+    mean = [-2.0, -1.0, 0.0]
+    data = pd.DataFrame(data=np.random.normal(mean, 1.0, (len(dates), n)),
+                        index=dates,
+                        columns=['x' + str(m + 1) for m in range(n)])
+    print(data)
+
+    if local_test == LocalTests.DATA_LIST:
+        bt_lists = bootstrap_data(data=data,
+                                  bootsrap_type=BootsrapType.STATIONARY,
+                                  bootsrap_output=BootsrapOutput.DF_TO_LIST_ARRAYS)
+        for this in bt_lists:
+            print(this)
+
+    elif local_test == LocalTests.DATA_SERIES:
+        bt_data = bootstrap_data(data=data.iloc[:, 0],
+                                 bootsrap_type=BootsrapType.STATIONARY,
+                                 bootsrap_output=BootsrapOutput.SERIES_TO_DF)
+        print(bt_data)
+
+
+    elif local_test == LocalTests.PLOT_PRICE_BOOTSTRAP:
         plot_price_bootrstrap(prices['SPY'])
 
     elif local_test == LocalTests.PLOT_EW_INDEX:
@@ -187,7 +217,7 @@ def run_local_test(local_test: LocalTests):
 
     elif local_test == LocalTests.AR_RESIDUALS:
         prices, fund_data = get_test_data()
-        residuals, intercept, beta = bts.compute_ar_residuals(data=fund_data)
+        residuals, intercept, beta = compute_ar_residuals(data=fund_data)
         residuals = pd.DataFrame(residuals, index=fund_data.index, columns=fund_data.columns)
         pts.plot_time_series(residuals,
                              legend_stats=pts.LegendStats.AVG_STD,
@@ -205,5 +235,4 @@ def run_local_test(local_test: LocalTests):
 
 
 if __name__ == '__main__':
-
     run_local_test(local_test=LocalTests.FIT_AR_MODEL)

@@ -35,7 +35,7 @@ def run_local_test(local_test: LocalTests):
     if local_test == LocalTests.CORE_ETFS:
         benchmark = 'SPY'
         tickers = [benchmark, 'QQQ', 'EEM', 'TLT', 'IEF', 'LQD', 'HYG', 'SHY', 'GLD']
-        time_period = qis.TimePeriod('31Dec2007', end_date)  # time period for reporting
+        time_period = qis.TimePeriod('31Dec2002', end_date)  # time period for reporting
 
     elif local_test == LocalTests.BTC_SQQQ:
         benchmark = 'QQQ'
@@ -90,8 +90,8 @@ def run_local_test(local_test: LocalTests):
     if prices is None:
         prices = yf.download(tickers=tickers, start="2003-12-31", end=None, ignore_tz=True, auto_adjust=True)['Close'][tickers]
 
-    prices = prices.asfreq('B', method='ffill')  # make B frequency
-    prices = prices.dropna()
+    prices = prices.asfreq('B', method='ffill').ffill()  # make B frequency
+    # prices = prices.dropna()
     print(prices)
 
     kwargs = fetch_default_report_kwargs(time_period=time_period)

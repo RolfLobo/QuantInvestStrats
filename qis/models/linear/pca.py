@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
-from enum import Enum
 import qis.utils.dates as da
-import qis.perfstats.returns as ret
 import qis.models.linear.ewm as ewm
 
 
@@ -97,31 +95,3 @@ def compute_data_pca_r2(data: pd.DataFrame,
                                      orient='index',
                                      columns=[f"PC{n+1}" for n in range(len(data.columns))])
     return pca_r2s
-
-
-class LocalTests(Enum):
-    PCA_R2 = 1
-
-
-def run_local_test(local_test: LocalTests):
-    """Run local tests for development and debugging purposes.
-
-    These are integration tests that download real data and generate reports.
-    Use for quick verification during development.
-    """
-
-    from qis.test_data import load_etf_data
-    prices = load_etf_data().dropna()
-    print(prices)
-    returns = ret.to_returns(prices=prices)
-
-    if local_test == LocalTests.PCA_R2:
-        pca_r2 = compute_data_pca_r2(data=returns,
-                                     freq='YE',
-                                     ewm_lambda=0.97)
-        print(pca_r2)
-
-
-if __name__ == '__main__':
-
-    run_local_test(local_test=LocalTests.PCA_R2)

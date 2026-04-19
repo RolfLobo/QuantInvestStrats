@@ -240,7 +240,12 @@ def compute_pa_return(prices: Union[pd.DataFrame, pd.Series],
         ratio = np.where(np.greater(ratio, 0.0), ratio, np.nan)
         if num_years > 1.0:
             # Geometric compounding for periods >1 year
-            compounded_return_pa = np.power(ratio, 1.0 / num_years, where=np.isfinite(ratio)) - 1
+            # NumPy 2.x: explicit out= so non-finite positions are deterministic nan.
+            compounded_return_pa = np.power(
+                ratio, 1.0 / num_years,
+                out=np.full_like(ratio, np.nan, dtype=float),
+                where=np.isfinite(ratio),
+            ) - 1
         else:
             if annualize_less_1y:
                 # Linear annualization for periods <1 year
@@ -325,12 +330,21 @@ def compute_returns_dict(prices: Union[pd.DataFrame, pd.Series],
         start_value = prices.iloc[0]
         end_value = prices.iloc[-1]
 
+    # NumPy 2.x: use helper lambdas with explicit out= to avoid uninitialized memory on masked positions.
+    def _safe_log1p(x):
+        x_arr = np.asarray(x, dtype=float)
+        return np.log(
+            1.0 + x_arr,
+            out=np.full_like(x_arr, np.nan, dtype=float),
+            where=np.greater(x_arr, -1.0),
+        )
+
     # Build return dictionary
     return_dict = {PerfStat.TOTAL_RETURN.to_str(): total_return,
                    PerfStat.PA_RETURN.to_str(): compounded_return_pa,
                    PerfStat.PA_EXCESS_RETURN.to_str(): excess_return_pa,
-                   PerfStat.AN_LOG_RETURN.to_str(): np.log(1.0 + compounded_return_pa, where=np.greater(compounded_return_pa, -1.0)),
-                   PerfStat.AN_LOG_RETURN_EXCESS.to_str(): np.log(1.0 + excess_return_pa, where=np.greater(excess_return_pa, -1.0)),
+                   PerfStat.AN_LOG_RETURN.to_str(): _safe_log1p(compounded_return_pa),
+                   PerfStat.AN_LOG_RETURN_EXCESS.to_str(): _safe_log1p(excess_return_pa),
                    PerfStat.AVG_AN_RETURN.to_str(): np.divide(total_return, num_years),
                    PerfStat.APR.to_str(): CALENDAR_DAYS_PER_YEAR_SHARPE*total_return/num_days if num_days > 0 else CALENDAR_DAYS_PER_YEAR_SHARPE*total_return,
                    PerfStat.NAV1.to_str(): (1.0+total_return),

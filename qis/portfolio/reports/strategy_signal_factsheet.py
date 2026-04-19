@@ -48,7 +48,7 @@ def generate_weight_change_report(portfolio_data: PortfolioData,
             group_preds[group] = df_ac.copy()
             if group_deflator is not None and group in group_deflator.keys():
                 df_ac *= group_deflator[group]
-            agg_preds[group] = df_ac.sum(0)
+            agg_preds[group] = df_ac.sum(axis=0)
         agg_preds = pd.DataFrame.from_dict(agg_preds, orient='index')
 
         post_agg = ''
@@ -77,7 +77,7 @@ def generate_weight_change_report(portfolio_data: PortfolioData,
                 print(f"{fitted_models_g[group].summary()}")
             qis.plot_bars(df=df_ac,
                           stacked=True,
-                          totals=df_ac.sum(1).to_list(),
+                          totals=df_ac.sum(axis=1).to_list(),
                           annotate_totals=False,
                           title=f"{group}",
                           ncols=len(df_ac.columns)//2,

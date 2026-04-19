@@ -128,7 +128,7 @@ def plot_before_after_prices(joint_prices: pd.DataFrame,
                              ) -> Optional[plt.Figure]:
 
     if add_average:
-        joint_prices.insert(0, column='Average', value=joint_prices.mean(1))
+        joint_prices.insert(0, column='Average', value=joint_prices.mean(axis=1))
     if is_norm:
         joint_prices = joint_prices - 1.0
         yvar_format='{:,.0%}'

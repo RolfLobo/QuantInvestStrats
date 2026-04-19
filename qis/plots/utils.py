@@ -1380,7 +1380,13 @@ def compute_heatmap_colors(a: np.ndarray,
         a[max_idx] = upper
 
     diffs = upper - lower
-    scaler = np.reciprocal(diffs, where=np.greater(diffs, 0.0))
+    # NumPy 2.x: explicit out= so masked positions (diffs<=0) are deterministic nan,
+    # which the subsequent np.isfinite check then filters out.
+    scaler = np.reciprocal(
+        diffs,
+        out=np.full_like(diffs, np.nan, dtype=float),
+        where=np.greater(diffs, 0.0),
+    )
     cond = np.logical_and(np.isfinite(scaler), np.isfinite(scaler))
     z = alpha*np.where(cond, scaler * (a - lower), np.nan)
 

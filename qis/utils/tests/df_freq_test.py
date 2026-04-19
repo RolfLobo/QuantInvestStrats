@@ -51,7 +51,7 @@ def run_local_test(local_test: LocalTests):
         print(freq_data2.index)
 
     elif local_test == LocalTests.INT_INDEX:
-        df2 = df_resample_at_int_index(df=df.cumsum(0), func=None, sample_size=21)
+        df2 = df_resample_at_int_index(df=df.cumsum(axis=0), func=None, sample_size=21)
         print(f"func=None")
         print(df2)
 

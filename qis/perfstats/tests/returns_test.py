@@ -60,7 +60,7 @@ def run_local_test(local_test: LocalTests):
     elif local_test == LocalTests.ADJUST_PORTFOLIO_PA_RETURNS:
         returns = prices.pct_change()
 
-        portfolio_price = returns_to_nav(returns=returns.sum(1)).rename('portfolio')
+        portfolio_price = returns_to_nav(returns=returns.sum(axis=1)).rename('portfolio')
 
         asset_prices_adj = adjust_navs_to_portfolio_pa(portfolio_nav=portfolio_price,
                                                        asset_prices=prices)

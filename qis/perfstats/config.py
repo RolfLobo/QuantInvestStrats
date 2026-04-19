@@ -42,7 +42,7 @@ class PerfStat(ColVar, Enum):
     NUM_OBS = ColVar(name='Num Obs', short_n='Num\nObs', value_type=ValueType.INT)
 
     # computed in compute_pa_return_dict
-    TOTAL_RETURN = ColVar(name='Total', short_n='Total return', value_type=ValueType.PERCT0)
+    TOTAL_RETURN = ColVar(name='Total', short_n='Total\nreturn', value_type=ValueType.PERCT0)
     PA_RETURN = ColVar(name='P.a. return', short='P.a.', short_n='P.a.\nreturn', value_type=ValueType.PERCT)
     AN_LOG_RETURN = ColVar(name='An. log return', short_n='An. log-return', value_type=ValueType.PERCT)
     AN_LOG_RETURN_EXCESS = ColVar(name='An. log return ex', short_n='An. log-return ex', value_type=ValueType.PERCT)
@@ -237,23 +237,3 @@ class PerfParams:
                                return_type=return_type or self.return_type,
                                rates_data=rates_data if rates_data is not None else self.rates_data)
         return this_copy
-
-
-class LocalTests(Enum):
-    PERFORMANCE_STAT = 1
-
-
-def run_local_test(local_test: LocalTests):
-    """Run local tests for development and debugging purposes.
-
-    These are integration tests that download real data and generate reports.
-    Use for quick verification during development.
-    """
-
-    if local_test == LocalTests.PERFORMANCE_STAT:
-        print(PerfStat.TOTAL_RETURN)
-
-
-if __name__ == '__main__':
-
-    run_local_test(local_test=LocalTests.PERFORMANCE_STAT)

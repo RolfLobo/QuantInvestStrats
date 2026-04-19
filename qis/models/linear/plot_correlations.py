@@ -2,15 +2,11 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from enum import Enum
 from typing import Optional, Union
 
-import qis
 # qis
 import qis.utils.dates as da
 import qis.utils.np_ops as npo
-import qis.utils.df_str as dfs
 import qis.perfstats.returns as ret
 from qis.perfstats.config import PerfParams, ReturnTypes
 from qis.perfstats.regime_classifier import BenchmarkReturnsQuantilesRegime
@@ -225,42 +221,3 @@ def plot_corr_matrix_from_covar(covar: pd.DataFrame,
             ax.vlines([hline_row], hline_row-1, hline_row, lw=1)
             ax.hlines([vline_column], vline_column-1, vline_column, lw=1)
     return fig
-
-
-class LocalTests(Enum):
-    CORR_TABLE = 1
-    CORR_MATRIX = 2
-    EWMA_CORR = 3
-    PLOT_CORR_FROM_COVAR = 4
-
-
-def run_local_test(local_test: LocalTests):
-    """Run local tests for development and debugging purposes.
-
-    These are integration tests that download real data and generate reports.
-    Use for quick verification during development.
-    """
-    from qis.test_data import load_etf_data
-    prices = load_etf_data().dropna()
-
-    if local_test == LocalTests.CORR_TABLE:
-        plot_returns_corr_table(prices=prices)
-
-    elif local_test == LocalTests.CORR_MATRIX:
-        fig, ax = plt.subplots(1, 1, figsize=(10, 10), constrained_layout=True)
-        plot_returns_corr_matrix_time_series(prices=prices, regime_benchmark='SPY', ax=ax)
-
-    elif local_test == LocalTests.EWMA_CORR:
-        plot_returns_ewm_corr_table(prices=prices.iloc[:, :5])
-
-    elif local_test == LocalTests.PLOT_CORR_FROM_COVAR:
-        returns = ret.to_returns(prices=prices, freq='ME')
-        covar = 12.0 * ccm.compute_masked_covar_corr(data=returns, is_covar=True)
-        plot_corr_matrix_from_covar(covar)
-
-    plt.show()
-
-
-if __name__ == '__main__':
-
-    run_local_test(local_test=LocalTests.PLOT_CORR_FROM_COVAR)

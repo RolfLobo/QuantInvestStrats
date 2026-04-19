@@ -219,7 +219,11 @@ def to_finite_reciprocal(data: Union[pd.Series, pd.DataFrame, np.ndarray],
     cond = None
     if is_gt_zero:
         cond = np.greater(x, 0.0)
-    rec_x = np.where(cond, np.reciprocal(x, where=cond), np.nan)
+    # NumPy 2.x: `where=` without `out=` leaves masked entries uninitialized.
+    # Provide an explicit nan-filled `out` buffer so masked positions are well-defined.
+    rec_buf = np.full_like(x, np.nan, dtype=float)
+    np.reciprocal(x, out=rec_buf, where=cond)
+    rec_x = np.where(cond, rec_buf, np.nan)
     rec_x = to_finite(rec_x, fill_value)
 
     if isinstance(data, pd.DataFrame):
@@ -239,7 +243,12 @@ def to_finite_ratio(x: Union[pd.Series, pd.DataFrame, np.ndarray],
     """
     x_np = to_finite_np(x, fill_value=fill_value)
     y_np = to_finite_np(y, fill_value=fill_value)
-    x_y = np.divide(x_np, y_np, where=np.isclose(y_np, 0.0)==False)
+    # NumPy 2.x requires explicit `out=` to avoid uninitialized memory where the mask is False.
+    x_y = np.divide(
+        x_np, y_np,
+        out=np.full_like(x_np, np.nan, dtype=float),
+        where=~np.isclose(y_np, 0.0),
+    )
 
     if isinstance(x, pd.DataFrame):
         x_y = pd.DataFrame(x_y, columns=x.columns, index=x.index)
@@ -336,7 +345,9 @@ def np_shift(a: np.ndarray,
         raise TypeError('only 1-d arrays are supported')
     n = a.shape[0]
 
-    result = np.empty_like(a)
+    # Use np.empty (not np.empty_like) to avoid inheriting read-only flags
+    # from arrays that came out of pandas under pandas 3.0 CoW.
+    result = np.empty(a.shape, dtype=a.dtype)
 
     if shift > 0:
         result[shift:] = a[:-shift]
@@ -391,8 +402,10 @@ def compute_paired_signs(x: np.ndarray,
     compute signs equality of x and y excluding 0.0
     """
     joint_cond = np.logical_not(np.logical_and(np.isclose(x, 0.0), np.isclose(y, 0.0)))
-    trend_cond = np.equal(np.sign(x), np.sign(y), where=joint_cond)
-    rev_cond = np.not_equal(np.sign(x), np.sign(y), where=joint_cond)
+    # NumPy 2.x: supply explicit `out=` buffers so masked positions are deterministic (False).
+    sx, sy = np.sign(x), np.sign(y)
+    trend_cond = np.equal(sx, sy, out=np.zeros_like(joint_cond), where=joint_cond)
+    rev_cond = np.not_equal(sx, sy, out=np.zeros_like(joint_cond), where=joint_cond)
     return joint_cond, trend_cond, rev_cond
 
 
@@ -491,9 +504,13 @@ def set_nans_for_warmup_period(a: Union[np.ndarray, pd.DataFrame],
         raise ValueError(f"type={type(warmup_period)}")
     if isinstance(a, pd.DataFrame):
         a0 = a
-        a = a.to_numpy()
+        # pandas 3.0 + CoW: .to_numpy() returns a non-writable view. Force a writable copy.
+        a = a.to_numpy().copy()
     else:
         a0 = None
+        a = np.asarray(a)
+        if not a.flags.writeable:
+            a = a.copy()
     if a.ndim == 2:
         if isinstance(warmup_period, int):
             warmup_period = np.full(a.shape[1], warmup_period)
@@ -553,76 +570,3 @@ def select_non_nan_x_y(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.nda
             x = x[is_nan_cond == False, :]
             y = y[is_nan_cond == False, :]
     return x, y
-
-
-class LocalTests(Enum):
-    SHIFT_TEST = 1
-    CUM_POWER = 2
-    ROLLING = 3
-    WA = 4
-    ARRAY_RANK = 5
-    NEAREST = 6
-
-
-def run_local_test(local_test: LocalTests):
-    """Run local tests for development and debugging purposes.
-
-    These are integration tests that download real data and generate reports.
-    Use for quick verification during development.
-    """
-
-    if local_test == LocalTests.SHIFT_TEST:
-        test_array = np.array([str(n) for n in range(10)])
-        print('test_array')
-        print(test_array)
-
-        print('shift=2')
-        for roll_fill_type in RollFillType:
-            print(roll_fill_type)
-            print(np_shift(a=test_array, shift=2, roll_fill_type=roll_fill_type))
-
-        print('shift=-2')
-        for roll_fill_type in RollFillType:
-            print(roll_fill_type)
-            print(np_shift(a=test_array, shift=-2, roll_fill_type=roll_fill_type))
-
-    elif local_test == LocalTests.CUM_POWER:
-        tic = time.perf_counter()
-        for _ in np.arange(20):
-            b = compute_expanding_power(n=10000000, power_lambda=0.97, reverse_columns=True)
-        toc = time.perf_counter()
-        print(f"{toc - tic} secs to run")
-        print(b)
-
-    elif local_test == LocalTests.ROLLING:
-        x = np.array([1.0, 2.0, np.nan, np.nan, 3.0, 4.0, 5.0])
-        xx = running_mean(x=x, n=2)
-        print(xx)
-
-    elif local_test == LocalTests.WA:
-        x = np.array([1.0, 2.0, np.nan, np.nan, 3.0, 4.0, 5.0])
-        weights = np.arange(len(x))
-        print(x)
-        print(weights)
-        xx = np_nonan_weighted_avg(a=x, weights=weights)
-        print(xx)
-
-    elif local_test == LocalTests.ARRAY_RANK:
-        a = np.array([1.0, 2.0, 10.0, 20.0, 3.0, 4.0, 5.0])
-        array_rank = np.argsort(a).argsort()  # ranks by smallest value
-        print(np.argsort(a))
-        array_idx_rank = {array_rank[n]: n for n in np.arange(a.shape[0])}  # assign rank to idx
-        array_idx_rank = dict(sorted(array_idx_rank.items()))  # sort by rank
-        print(array_idx_rank)
-
-    elif local_test == LocalTests.NEAREST:
-        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        print(a)
-        print(f"x={2.1}, nearest={find_nearest(a=a, value=2.1)}")
-        print(f"x={2.1}, nearest={find_nearest(a=a, value=2.1, is_equal_or_largest=True)}")
-        print(f"x={2.0}, nearest={find_nearest(a=a, value=2.0, is_equal_or_largest=True)}")
-
-
-if __name__ == '__main__':
-
-    run_local_test(local_test=LocalTests.SHIFT_TEST)

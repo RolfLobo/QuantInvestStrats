@@ -143,7 +143,7 @@ def compute_regimes_pa_perf_table_from_sampled_returns(
 
     if additive_pa_returns_to_pa_total:
         # Adjust regime PA to match total PA return
-        total_sum = regime_pa[regime_pa_columns].sum(1)
+        total_sum = regime_pa[regime_pa_columns].sum(axis=1)
         total_to_match = ra_perf_table[PerfStat.PA_RETURN.to_str()]
         total_pa_diff = total_to_match - total_sum
 
@@ -158,7 +158,9 @@ def compute_regimes_pa_perf_table_from_sampled_returns(
         regime_pa1 = regime_pa
 
     if is_use_benchmark_means and benchmark is not None:
-        regime_pa1.loc[benchmark][regime_pa_columns] = regime_avg.loc[benchmark]
+        # pandas 3.0 CoW: chained assignment regime_pa1.loc[benchmark][regime_pa_columns] = ...
+        # silently no-ops. Use single .loc[row, cols] indexer instead.
+        regime_pa1.loc[benchmark, regime_pa_columns] = regime_avg.loc[benchmark]
 
     # Compute regime Sharpe ratios
     vols_for_sharpe_pa = ra_perf_table[PerfStat.VOL.to_str()]
@@ -304,8 +306,17 @@ class RegimeClassifier(ABC):
             Series of color codes
         """
         map_id_into_color = self.get_regime_ids_colors()
-        regime_id_color = regime_data.map(map_id_into_color).astype(str)
-        regime_id_color = regime_id_color.replace({'nan': '#FFFFFF'}) # type: ignore
+        # pandas 3.0 + Categorical input:
+        #   - regime_data is typically Categorical (from pd.cut), so .map returns a Categorical
+        #     whose categories are only the mapped color codes — assigning '#FFFFFF' to NaN
+        #     positions raises "Cannot setitem on a Categorical with a new category".
+        #   - Under the new `str` dtype, .astype(str) also preserves real NaN instead of
+        #     coercing to the literal string 'nan', so the old .replace({'nan': ...}) no-ops.
+        # Fix: map, coerce to plain object, then fillna with the neutral color.
+        regime_id_color = regime_data.map(map_id_into_color)
+        # astype(object) drops any Categorical / str-ExtensionArray wrapping so fillna accepts
+        # an arbitrary string value.
+        regime_id_color = regime_id_color.astype(object).fillna('#FFFFFF').astype(str)
         return regime_id_color
 
 
@@ -717,106 +728,3 @@ def compute_bnb_regimes_pa_perf_table(prices: pd.DataFrame,
     )
 
     return regimes_pa_perf_table
-
-
-class LocalTests(Enum):
-    """Test cases for local development."""
-    BNB_REGIME = 1
-    BNB_PERF_TABLE = 2
-    POS_NEG_REGIME = 3
-    VOL_REGIME = 4
-    TO_DICT = 5
-
-
-def run_local_test(local_test: LocalTests):
-    """Run local tests for development and debugging.
-
-    Integration tests that download real data and generate reports
-    for quick verification during development.
-
-    Args:
-        local_test: Test case to run
-    """
-    from qis.test_data import load_etf_data
-    prices = load_etf_data().dropna()
-    perf_params = PerfParams()
-
-    if local_test == LocalTests.BNB_REGIME:
-        regime_classifier = BenchmarkReturnsQuantilesRegime(
-            freq='QE',
-            q=np.array([0.0, 0.17, 0.83, 1.0])
-        )
-
-        regime_ids = regime_classifier.compute_sampled_returns_with_regime_id(
-            prices=prices,
-            benchmark='SPY'
-        )
-        print(f"regime_ids:\n{regime_ids}")
-
-        cond_perf_table, regime_datas = regime_classifier.compute_regimes_pa_perf_table(
-            prices=prices,
-            benchmark='SPY',
-            perf_params=perf_params
-        )
-        print(f"\nregime_means:\n{cond_perf_table}")
-        print(f"\nregime_pa:\n{regime_datas}")
-
-    elif local_test == LocalTests.BNB_PERF_TABLE:
-        df = compute_bnb_regimes_pa_perf_table(
-            prices=prices,
-            benchmark='SPY',
-            perf_params=PerfParams()
-        )
-        print(df)
-        print(df.columns)
-
-    elif local_test == LocalTests.POS_NEG_REGIME:
-        regime_classifier = BenchmarkReturnsPositiveNegativeRegime(freq='QE')
-
-        regime_ids = regime_classifier.compute_sampled_returns_with_regime_id(
-            prices=prices,
-            benchmark='SPY'
-        )
-        print(f"regime_ids:\n{regime_ids}")
-
-        cond_perf_table, regime_datas = regime_classifier.compute_regimes_pa_perf_table(
-            prices=prices,
-            benchmark='SPY',
-            perf_params=perf_params
-        )
-        print(f"\ncond_perf_table:\n{cond_perf_table}")
-
-    elif local_test == LocalTests.VOL_REGIME:
-        regime_classifier = BenchmarkVolsQuantilesRegime(freq='QE', q=4)
-
-        regime_ids = regime_classifier.compute_sampled_returns_with_regime_id(
-            prices=prices,
-            benchmark='SPY'
-        )
-        print(f"regime_ids:\n{regime_ids}")
-
-        cond_perf_table, regime_datas = regime_classifier.compute_regimes_pa_perf_table(
-            prices=prices,
-            benchmark='SPY',
-            perf_params=perf_params
-        )
-        print(f"\ncond_perf_table:\n{cond_perf_table}")
-
-    elif local_test == LocalTests.TO_DICT:
-        print("Testing to_dict() method for all regime classifiers\n")
-
-        # Test BenchmarkReturnsQuantilesRegime
-        classifier1 = BenchmarkReturnsQuantilesRegime(
-            freq='QE',
-            return_type=ReturnTypes.RELATIVE,
-            q=np.array([0.0, 0.25, 0.75, 1.0])
-        )
-        print("BenchmarkReturnsQuantilesRegime.to_dict():")
-        print(classifier1.to_dict())
-        print()
-
-    plt.show()
-
-
-if __name__ == '__main__':
-    run_local_test(local_test=LocalTests.TO_DICT)

@@ -14,9 +14,9 @@ from typing import Union, List, Optional, Tuple
 from enum import Enum
 
 # qis
-import qis
 import qis.plots.utils as put
 import qis.perfstats.desc_table as dsc
+from qis.utils.struct_ops import update_kwargs
 
 
 class PdfType(Enum):
@@ -192,7 +192,7 @@ def plot_histogram(df: Union[pd.DataFrame, pd.Series],
         stats_table = dsc.compute_desc_table(df=df,
                                              annualize_vol=annualize_vol,
                                              desc_table_type=desc_table_type,
-                                             **qis.update_kwargs(kwargs, dict(var_format=xvar_format)))
+                                             **update_kwargs(kwargs, dict(var_format=xvar_format)))
         put.set_legend_with_stats_table(stats_table=stats_table,
                                         ax=ax,
                                         colors=colors,
@@ -267,50 +267,3 @@ def trunc_dens(x: np.ndarray,
         d_dens[d_support > 0] = 0
     d_dens = d_dens / np.nansum(d_dens)
     return d_support, d_dens
-
-
-class LocalTests(Enum):
-    TEST = 1
-    RETURNS = 2
-
-
-def run_local_test(local_test: LocalTests):
-    """Run local tests for development and debugging purposes.
-
-    These are integration tests that download real data and generate reports.
-    Use for quick verification during development.
-    """
-
-    if local_test == LocalTests.TEST:
-        np.random.seed(1)
-        n_instruments = 100
-        m_samples = 2
-        exposures_nm = np.random.normal(0.0, 1.0, size=(n_instruments, m_samples))
-        data = pd.DataFrame(data=exposures_nm, columns=[f"id{n+1}" for n in range(m_samples)])
-
-        fig, ax = plt.subplots(1, 1, figsize=(3.9, 3.4), tight_layout=True)
-        global_kwargs = dict(fontsize=6, linewidth=0.5, weight='normal', first_color_fixed=True)
-
-        plot_histogram(df=data,
-                       add_data_std_pdf=True,
-                       add_last_value=True,
-                       ax=ax,
-                       **global_kwargs)
-        # ax.locator_params(nbins=10, axis='x')
-
-    elif local_test == LocalTests.RETURNS:
-        from qis.test_data import load_etf_data
-        prices = load_etf_data().dropna()
-        returns = qis.to_returns(prices=prices[['EEM', 'SPY']], freq='QE')
-        plot_histogram(df=returns,
-                       xvar_format='{:.0%}',
-                       add_bar_at_peak=True,
-                       desc_table_type=dsc.DescTableType.NONE
-                       )
-
-    plt.show()
-
-
-if __name__ == '__main__':
-
-    run_local_test(local_test=LocalTests.RETURNS)

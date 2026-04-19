@@ -206,8 +206,8 @@ def run_local_test(local_test: LocalTests):
         ewm_linear_model.plot_factor_loadings(factor='SPY')
 
         factor_alpha, explained_returns = ewm_linear_model.get_factor_alpha()
-        pts.plot_time_series(df=factor_alpha.cumsum(0), title='Cumulative alpha')
-        pts.plot_time_series(df=explained_returns.cumsum(0), title='Cumulative explained return')
+        pts.plot_time_series(df=factor_alpha.cumsum(axis=0), title='Cumulative alpha')
+        pts.plot_time_series(df=explained_returns.cumsum(axis=0), title='Cumulative explained return')
 
     elif local_test == LocalTests.ATTRIBUTION:
         benchmark_prices = prices[['SPY', 'TLT']]
@@ -224,7 +224,7 @@ def run_local_test(local_test: LocalTests):
                                                                              freq_beta='W-WED',
                                                                              factor_beta_span=52,  # quarter
                                                                              residual_name='Alpha')
-        pts.plot_time_series(df=attribution.cumsum(0))
+        pts.plot_time_series(df=attribution.cumsum(axis=0))
 
     plt.show()
 

@@ -201,7 +201,7 @@ def append_time_series(df_newer: Union[pd.DataFrame, pd.Series],  # more recent 
         overlap_new = df_newer.loc[t0:t1, :]
 
         if numerical_check_columns is not None:
-            diff = np.abs(overlap_old[numerical_check_columns] - overlap_new[numerical_check_columns]).mean(0)
+            diff = np.abs(overlap_old[numerical_check_columns] - overlap_new[numerical_check_columns]).mean(axis=0)
             # if np.any(np.greater(diff, 1e-0)):
             #    print(f"differences detected {diff}")
         else:

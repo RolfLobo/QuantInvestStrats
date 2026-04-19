@@ -65,7 +65,14 @@ def compute_desc_table(df: Union[pd.DataFrame, pd.Series],
 
     if is_add_tstat:
         an_mean = an_factor * mean
-        tstats = np.divide(an_mean, vol, where=np.greater(an_mean, 0.0))
+        # NumPy 2.x: explicit out= so masked positions are deterministic nan, not uninitialized memory.
+        # NB: original mask is `an_mean > 0`, not `vol > 0` — preserved; revisit if the intent was
+        # actually to guard div-by-zero on vol rather than to filter on mean sign.
+        tstats = np.divide(
+            an_mean, vol,
+            out=np.full_like(an_mean, np.nan, dtype=float),
+            where=np.greater(an_mean, 0.0),
+        )
         descriptive_table[PerfStat.T_STAT.to_str()] = [norm_variable_display_type.format(x) for x in tstats]
 
     nan_policy = 'omit'  # skip nans
@@ -134,31 +141,3 @@ def compute_desc_table(df: Union[pd.DataFrame, pd.Series],
         raise TypeError(f"desc_table_type={desc_table_type} is not implemented")
 
     return descriptive_table
-
-
-class LocalTests(Enum):
-    TABLE = 1
-
-
-def run_local_test(local_test: LocalTests):
-    """Run local tests for development and debugging purposes.
-
-    These are integration tests that download real data and generate reports.
-    Use for quick verification during development.
-    """
-
-    from qis.test_data import load_etf_data
-    returns = load_etf_data().dropna().asfreq('QE').pct_change()
-
-    if local_test == LocalTests.TABLE:
-        df = compute_desc_table(df=returns,
-                                desc_table_type=DescTableType.EXTENSIVE,
-                                var_format='{:.2f}',
-                                annualize_vol=True,
-                                is_add_tstat=False)
-        print(df)
-
-
-if __name__ == '__main__':
-
-    run_local_test(local_test=LocalTests.TABLE)

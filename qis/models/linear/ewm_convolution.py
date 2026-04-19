@@ -49,7 +49,20 @@ def ewm_xy_convolution(returns: pd.DataFrame,
         ewm_vol = ewm.compute_ewm_vol(data=returns,
                                       ewm_lambda=0.94,
                                       annualize=False)
-        returns = np.divide(returns, ewm_vol.shift(1), where=np.isclose(ewm_vol, 0.0)==False)
+        # NumPy 2.x: work on ndarrays with explicit out=; rebuild DataFrame from result.
+        returns_np = returns.to_numpy(dtype=float) if isinstance(returns, pd.DataFrame) else np.asarray(returns, dtype=float)
+        ewm_vol_np = ewm_vol.shift(1).to_numpy(dtype=float) if isinstance(ewm_vol, pd.DataFrame) else np.asarray(ewm_vol.shift(1), dtype=float)
+        returns_np = np.divide(
+            returns_np, ewm_vol_np,
+            out=np.full_like(returns_np, np.nan),
+            where=~np.isclose(ewm_vol_np, 0.0),
+        )
+        if isinstance(returns, pd.DataFrame):
+            returns = pd.DataFrame(returns_np, index=returns.index, columns=returns.columns)
+        elif isinstance(returns, pd.Series):
+            returns = pd.Series(returns_np, index=returns.index, name=returns.name)
+        else:
+            returns = returns_np
 
     # rolling returns by the span
     if not np.isclose(signal_span, 1):

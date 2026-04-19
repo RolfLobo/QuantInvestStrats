@@ -6,8 +6,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import List, Optional, Tuple
-from enum import Enum
-
 # qis
 import qis.plots.utils as put
 from qis.plots.utils import LegendStats
@@ -75,7 +73,7 @@ def plot_stack(df: pd.DataFrame,
     ax.set_xlim(re_indexed_data.index[0], re_indexed_data.index[-1])
 
     if add_total_line:  # add total as line
-        totals = re_indexed_data.sum(1)
+        totals = re_indexed_data.sum(axis=1)
         sns.lineplot(x=re_indexed_data.index, y=totals, marker='None', color='black', ax=ax)
         # legend_labels.append('Total')
         colors.append('black')
@@ -154,62 +152,3 @@ def plot_stack(df: pd.DataFrame,
 
     return fig
 
-
-def create_sample_portfolio_data() -> pd.DataFrame:
-    """Create sample portfolio data for demonstration"""
-    dates = pd.date_range('2010-01-01', periods=120, freq='ME')
-
-    # Sample portfolio weights (can be positive or negative)
-    np.random.seed(42)
-    assets = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'META']
-
-    # Generate random weights that sum to approximately 100% (allowing for some leverage)
-    weights_data = []
-    for i in range(len(dates)):
-        weights = np.random.normal(20, 15, len(assets))  # Can be negative (short positions)
-        weights = weights / weights.sum() * 100  # Normalize to sum to 100%
-        weights_data.append(weights)
-
-    weights_df = pd.DataFrame(weights_data, columns=assets, index=dates)
-    return weights_df
-
-
-class LocalTests(Enum):
-    WEIGHTS = 1
-
-
-def run_local_test(local_test: LocalTests):
-    """Run local tests for development and debugging purposes.
-
-    These are integration tests that download real data and generate reports.
-    Use for quick verification during development.
-    """
-    if local_test == LocalTests.WEIGHTS:
-
-        weights = create_sample_portfolio_data()
-
-        fig, axs = plt.subplots(2, 1, figsize=(8, 10), tight_layout=True)
-        plot_stack(df=weights,
-                   stacked=False,
-                   use_bar_plot=True,
-                   x_rotation=90,
-                   yvar_format='{:,.0%}',
-                   date_format='%b-%y',
-                   fontsize=6,
-                   ax=axs[0])
-
-        plot_stack(df=weights,
-                   stacked=False,
-                   use_bar_plot=False,
-                   x_rotation=90,
-                   yvar_format='{:,.0%}',
-                   date_format='%b-%y',
-                   fontsize=6,
-                   ax=axs[1])
-
-    plt.show()
-
-
-if __name__ == '__main__':
-
-    run_local_test(local_test=LocalTests.WEIGHTS)

@@ -163,7 +163,7 @@ from qis.plots.derived.regime_data import (
     add_bnb_regime_shadows
 )
 
-from qis.plots.derived.desc_table import plot_desc_table
+from qis.plots.derived.desc_table import compute_desc_table
 
 from qis.plots.reports.utils import ReportType
 

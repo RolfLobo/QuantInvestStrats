@@ -47,12 +47,13 @@ def get_annualization_factor(freq: str,
     """
     an_days = 365.0 if is_calendar else default_trading_days
 
-    # Intraday frequencies
-    if freq in ['1M']:  # 1 minute
+    # Intraday frequencies. Note: '1M'/'5M' as minute aliases collided with monthly
+    # under pandas < 2.2 and have been replaced by 'min'/'5min' in pandas 3.0.
+    if freq in ['1min', 'min', 'T']:
         return an_days * 24.0 * 60.0
-    elif freq in ['5M']:
+    elif freq in ['5min', '5T']:
         return an_days * 24.0 * 12.0
-    elif freq in ['15M', '15T']:
+    elif freq in ['15min', '15T']:
         return an_days * 24.0 * 4.0
     elif freq in ['h', 'H']:  # hourly
         return an_days * 24.0
@@ -74,7 +75,8 @@ def get_annualization_factor(freq: str,
         return 13.0
 
     # Monthly frequencies
-    elif freq in ['1M', 'ME', 'M', 'BM', 'MS', 'BMS']:
+    # 'M' removed in pandas 3.0; kept here only for back-compat with 2.x callers.
+    elif freq in ['ME', 'M', 'BM', 'MS', 'BMS', 'BME']:
         return 12.0
     elif freq in ['2M', '2ME', '2BM', '2MS', '2BMS']:
         return 6.0
