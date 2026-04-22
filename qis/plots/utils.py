@@ -16,7 +16,7 @@ from matplotlib.lines import Line2D
 from scipy import stats as stats
 from scipy.stats import skew, kurtosis
 from enum import Enum
-from typing import List, Union, Tuple, Optional, Dict, Any
+from typing import List, Union, Tuple, Optional, Dict
 
 # qis
 import qis.utils.df_ops as dfo
@@ -1587,7 +1587,7 @@ def run_local_test(local_test: LocalTests):
         print(create_dummy_line())
 
     elif local_test == LocalTests.LEGEND_LINES:
-        from qis.test_data import load_etf_data
+        from qis.tests.price_data_test import load_etf_data
         prices = load_etf_data().dropna()
 
         for legend_stats in LegendStats:

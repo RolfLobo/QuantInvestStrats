@@ -28,7 +28,7 @@ def run_local_test(local_test: LocalTests):
     Args:
         local_test: Test case to run
     """
-    from qis.test_data import load_etf_data
+    from qis.tests.price_data_test import load_etf_data
     prices = load_etf_data().dropna()
     perf_params = PerfParams()
 

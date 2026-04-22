@@ -456,7 +456,7 @@ def run_local_test(local_test: LocalTests):
     These are integration tests that download real data and generate reports.
     Use for quick verification during development.
     """
-    from qis.test_data import load_etf_data
+    from qis.tests.price_data_test import load_etf_data
     prices = load_etf_data().dropna()
     print(prices)
 

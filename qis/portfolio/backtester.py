@@ -226,7 +226,7 @@ def run_local_test(local_test: LocalTests):
     import matplotlib.pyplot as plt
     import qis.plots.derived.prices as ppd
 
-    from qis.test_data import load_etf_data
+    from qis.tests.price_data_test import load_etf_data
     prices = load_etf_data().dropna()
 
     prices = prices[['SPY', 'TLT']]

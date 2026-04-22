@@ -1,4 +1,3 @@
-import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -54,7 +53,7 @@ def run_local_test(local_test: LocalTests):
 
     elif local_test == LocalTests.TOP_BOTTOM_RETURNS:
 
-        from qis.test_data import load_etf_data
+        from qis.tests.price_data_test import load_etf_data
         import qis.perfstats.returns as ret
 
         prices = load_etf_data().dropna().loc['2021', :]
@@ -87,7 +86,7 @@ def run_local_test(local_test: LocalTests):
                    add_total_bar=False)
 
     elif local_test == LocalTests.MONTHLY_RETURNS_BARS:
-        from qis.test_data import load_etf_data
+        from qis.tests.price_data_test import load_etf_data
         import qis.perfstats.returns as ret
 
         prices = load_etf_data().dropna().loc['2020':, :].iloc[:, :3]

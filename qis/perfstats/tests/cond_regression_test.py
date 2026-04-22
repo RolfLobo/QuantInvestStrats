@@ -18,7 +18,7 @@ def run_local_test(local_test: LocalTests):
     Args:
         local_test: Which test case to run
     """
-    from qis.test_data import load_etf_data
+    from qis.tests.price_data_test import load_etf_data
 
     # Load sample ETF price data
     prices = load_etf_data().dropna()

@@ -36,11 +36,11 @@ def run_local_test(local_test: LocalTests):
         print(prices)
         fu.save_df_to_csv(df=prices, file_name='etf_prices', local_path=RESOURCE_PATH)
 
-    elif local_test == LocalTests.TEST_LOADING:
+    elif local_test == LocalTests.ETF_PRICES:
         prices = load_etf_data()
         print(prices)
 
 
 if __name__ == '__main__':
 
-    run_local_test(local_test=LocalTests.ETF_PRICES)
+    run_local_test(local_test=LocalTests.TEST_LOADING)

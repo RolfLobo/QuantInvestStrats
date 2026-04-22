@@ -37,7 +37,7 @@ def run_local_test(local_test: LocalTests):
         # ax.locator_params(nbins=10, axis='x')
 
     elif local_test == LocalTests.RETURNS:
-        from qis.test_data import load_etf_data
+        from qis.tests.price_data_test import load_etf_data
         prices = load_etf_data().dropna()
         returns = qis.to_returns(prices=prices[['EEM', 'SPY']], freq='QE')
         plot_histogram(df=returns,

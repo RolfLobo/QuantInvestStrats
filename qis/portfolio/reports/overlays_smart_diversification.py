@@ -496,7 +496,7 @@ def run_local_test(local_test: LocalTests):
     Use for quick verification during development.
     """
 
-    from qis.test_data import load_etf_data
+    from qis.tests.price_data_test import load_etf_data
     prices = load_etf_data()
     print(prices)
     overlays = ['TLT', 'GLD']

@@ -11,8 +11,7 @@ from enum import Enum
 import qis.utils.df_cut as dfc
 from qis.perfstats.config import RegimeData, PerfParams
 from qis.perfstats.regime_classifier import (RegimeClassifier,
-                                             BenchmarkReturnsQuantilesRegime, BenchmarkVolsQuantilesRegime,
-                                             BenchmarkVolsQuantilesRegime, compute_bnb_regimes_pa_perf_table)
+                                             BenchmarkReturnsQuantilesRegime, BenchmarkVolsQuantilesRegime, compute_bnb_regimes_pa_perf_table)
 import qis.plots.bars as pba
 import qis.plots.boxplot as bxp
 
@@ -174,7 +173,7 @@ def run_local_test(local_test: LocalTests):
     Use for quick verification during development.
     """
 
-    from qis.test_data import load_etf_data
+    from qis.tests.price_data_test import load_etf_data
     prices = load_etf_data().dropna()
 
     kwargs = dict(var_format='{:.1f}')

@@ -16,7 +16,7 @@ def run_local_test(local_test: LocalTests):
     """
 
     import qis.plots.time_series as pts
-    from qis.test_data import load_etf_data
+    from qis.tests.price_data_test import load_etf_data
     prices = load_etf_data().dropna()
 
     if local_test == LocalTests.ROLLING_STATS:

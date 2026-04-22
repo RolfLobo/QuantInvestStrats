@@ -10,7 +10,7 @@ from matplotlib.ticker import FuncFormatter
 
 # qis
 import qis.plots.utils as put
-from qis.perfstats.regime_classifier import BenchmarkReturnsQuantilesRegime, BenchmarkReturnsQuantilesRegime
+from qis.perfstats.regime_classifier import BenchmarkReturnsQuantilesRegime
 
 
 def plot_regime_pdf(prices: pd.DataFrame,
@@ -79,7 +79,7 @@ def run_local_test(local_test: LocalTests):
     Use for quick verification during development.
     """
 
-    from qis.test_data import load_etf_data
+    from qis.tests.price_data_test import load_etf_data
     prices = load_etf_data()[['SPY', 'TLT']].dropna()
 
     if local_test == LocalTests.REGIME_PDF:

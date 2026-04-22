@@ -17,12 +17,13 @@ import os
 import functools
 import platform
 import time
+import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from os import listdir
 from os.path import isfile, join
-from typing import Dict, List, NamedTuple, Optional, Union, Literal
+from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union, Literal
 from matplotlib.backends.backend_pdf import PdfPages
 from enum import Enum
 
@@ -188,6 +189,76 @@ def timer(func):
 
 
 """
+Shared helpers for save_* functions
+"""
+
+
+_SHEET_NAME_MAX = 31
+_SHEET_NAME_BAD = "[]:*?/\\"
+
+
+def _coerce_to_df(obj, label: str) -> Optional[pd.DataFrame]:
+    """Coerce Series->DataFrame; warn and return None for unsupported/None inputs."""
+    if obj is None:
+        return None
+    if isinstance(obj, pd.DataFrame):
+        return obj
+    if isinstance(obj, pd.Series):
+        warnings.warn(f"{label!r}: Series converted to DataFrame")
+        return obj.to_frame()
+    warnings.warn(f"{label!r}: unsupported type {type(obj).__name__}; skipped")
+    return None
+
+
+def _sanitize_sheet_name(name, taken: set) -> str:
+    """Make `name` a valid Excel sheet name (<=31 chars, no []:*?/\\, unique)."""
+    s = str(name)
+    for bad in _SHEET_NAME_BAD:
+        s = s.replace(bad, "_")
+    s = s[:_SHEET_NAME_MAX]
+    if s != str(name):
+        warnings.warn(f"Sheet name {name!r} sanitized to {s!r}")
+    if s in taken:
+        base = s[: _SHEET_NAME_MAX - 4]
+        i = 2
+        while f"{base}_{i}" in taken:
+            i += 1
+        new = f"{base}_{i}"
+        warnings.warn(f"Duplicate sheet name {s!r}; using {new!r}")
+        s = new
+    taken.add(s)
+    return s
+
+
+def _iter_named(data, sheet_names) -> Iterable[Tuple[str, object]]:
+    """Yield (raw_name, obj) pairs for any of the accepted input shapes."""
+    if isinstance(data, dict):
+        if sheet_names is not None:
+            warnings.warn("sheet_names ignored for dict input; using dict keys")
+        yield from data.items()
+    elif isinstance(data, list):
+        if sheet_names is None:
+            names = [f"Sheet {i + 1}" for i in range(len(data))]
+        elif isinstance(sheet_names, str):
+            raise TypeError("sheet_names must be a list when data is a list")
+        elif len(sheet_names) < len(data):
+            raise ValueError(
+                f"sheet_names has {len(sheet_names)} entries, data has {len(data)}"
+            )
+        else:
+            names = sheet_names
+        yield from zip(names, data)
+    else:
+        if isinstance(sheet_names, str):
+            name = sheet_names
+        elif isinstance(sheet_names, list) and sheet_names:
+            name = sheet_names[0]
+        else:
+            name = "Sheet1"
+        yield name, data
+
+
+"""
 Pandas to/from Excel core
 """
 
@@ -215,8 +286,6 @@ def save_df_to_excel(data: Union[pd.DataFrame, List[pd.DataFrame], Dict[str, pd.
     mode = w: write new file
     mode = a: append to existing file
     """
-    if mode == 'w':
-        if_sheet_exists = None
     if add_current_date:
         file_name = f"{file_name}_{pd.Timestamp.now().strftime(DATE_FORMAT)}"
 
@@ -226,45 +295,29 @@ def save_df_to_excel(data: Union[pd.DataFrame, List[pd.DataFrame], Dict[str, pd.
                                     folder_name=folder_name,
                                     key=key)
 
-    excel_writer = pd.ExcelWriter(file_path, engine='openpyxl', mode=mode, if_sheet_exists=if_sheet_exists)
-    if isinstance(data, list):  # publish with sheet names
-        if sheet_names is None:
-            sheet_names = [f"Sheet {n+1}" for n, _ in enumerate(data)]
-        for df, name in zip(data, sheet_names):
-            if df is not None:
-                if isinstance(df, pd.DataFrame):
-                    pass
-                elif isinstance(df, pd.Series):
-                    df = df.to_frame()
-                else:
-                    continue
-                df = delocalize_df(df)
-                if transpose:
-                    df = df.T
-                df.to_excel(excel_writer=excel_writer, sheet_name=name)
-    elif isinstance(data, dict):  # publish with sheet names
-        for key, df in data.items():
-            if df is not None and isinstance(df, pd.DataFrame):
-                df = delocalize_df(df)
-                if transpose:
-                    df = df.T
-                df.to_excel(excel_writer=excel_writer, sheet_name=key)
-    else:
-        if data is None:
-            raise ValueError(f"None data")
+    # Resolve + validate everything before opening the writer so we don't leave
+    # a half-written / empty workbook behind on error.
+    taken: set = set()
+    frames: List[Tuple[str, pd.DataFrame]] = []
+    for raw_name, obj in _iter_named(data, sheet_names):
+        df = _coerce_to_df(obj, str(raw_name))
+        if df is None:
+            continue
+        df = delocalize_df(df)
         if transpose:
-            data = data.T
-        data = delocalize_df(data)
-        if sheet_names is not None:
-            if isinstance(sheet_names, str):
-                sheet_name = sheet_names
-            else:
-                sheet_name = sheet_names[0]
-        else:
-            sheet_name = 'Sheet1'
-        data.to_excel(excel_writer=excel_writer, sheet_name=sheet_name)
+            df = df.T
+        frames.append((_sanitize_sheet_name(raw_name, taken), df))
 
-    excel_writer.close()
+    if not frames:
+        raise ValueError("No DataFrames to write")
+
+    writer_kwargs = {"engine": "openpyxl", "mode": mode}
+    if mode == "a":
+        writer_kwargs["if_sheet_exists"] = if_sheet_exists
+
+    with pd.ExcelWriter(file_path, **writer_kwargs) as writer:
+        for name, df in frames:
+            df.to_excel(writer, sheet_name=name)
 
     return file_path
 
@@ -326,12 +379,23 @@ def save_df_dict_to_excel(datasets: Dict[Union[str, Enum, NamedTuple], pd.DataFr
                                     folder_name=folder_name,
                                     key=key)
 
-    excel_writer = pd.ExcelWriter(file_path, engine='openpyxl', mode=mode)
-    for key, data in datasets.items():
+    taken: set = set()
+    frames: List[Tuple[str, pd.DataFrame]] = []
+    for raw_name, obj in datasets.items():
+        df = _coerce_to_df(obj, str(raw_name))
+        if df is None:
+            continue
         if delocalize:
-            data = delocalize_df(data)
-        data.to_excel(excel_writer=excel_writer, sheet_name=key)
-    excel_writer.close()
+            df = delocalize_df(df)
+        frames.append((_sanitize_sheet_name(raw_name, taken), df))
+
+    if not frames:
+        raise ValueError("No DataFrames to write")
+
+    with pd.ExcelWriter(file_path, engine='openpyxl', mode=mode) as writer:
+        for name, df in frames:
+            df.to_excel(writer, sheet_name=name)
+
     return file_path
 
 
@@ -391,6 +455,10 @@ def save_df_to_csv(df: pd.DataFrame,
     """
     pandas to csv
     """
+    df = _coerce_to_df(df, label=file_name or key or "dataframe")
+    if df is None:
+        raise ValueError("No DataFrame to write")
+
     if add_current_date:
         file_name = f"{file_name}_{pd.Timestamp.now().strftime(DATE_FORMAT)}"
 
@@ -462,6 +530,10 @@ def append_df_to_csv(df: pd.DataFrame,
     """
     append csv file
     """
+    df = _coerce_to_df(df, label=file_name or key or "dataframe")
+    if df is None:
+        raise ValueError("No DataFrame to append")
+
     # check if file exist
     file_path = get_local_file_path(file_name=file_name,
                                     file_type=FileTypes.CSV,
@@ -476,9 +548,6 @@ def append_df_to_csv(df: pd.DataFrame,
         df = pd.concat([old_df, df], axis=0)
         if keep is not None:
             df = df.loc[~df.index.duplicated(keep=keep)]
-
-    else:
-        pass
 
     save_df_to_csv(df=df,
                    file_name=file_name,
@@ -499,14 +568,16 @@ def save_df_dict_to_csv(datasets: Dict[Union[str, Enum, NamedTuple], pd.DataFram
     if add_current_date:
         file_name = f"{file_name}_{pd.Timestamp.now().strftime(DATE_FORMAT)}"
 
-    for key, data in datasets.items():
-        if data is not None and isinstance(data, pd.DataFrame):
-            file_path = get_local_file_path(file_name=file_name,
-                                            file_type=FileTypes.CSV,
-                                            local_path=local_path,
-                                            folder_name=folder_name,
-                                            key=key)
-            data.to_csv(path_or_buf=file_path)
+    for raw_key, obj in datasets.items():
+        df = _coerce_to_df(obj, str(raw_key))
+        if df is None:
+            continue
+        file_path = get_local_file_path(file_name=file_name,
+                                        file_type=FileTypes.CSV,
+                                        local_path=local_path,
+                                        folder_name=folder_name,
+                                        key=raw_key)
+        df.to_csv(path_or_buf=file_path)
 
 
 def load_df_dict_from_csv(dataset_keys: List[Union[str, Enum, NamedTuple]],
@@ -564,6 +635,10 @@ def save_df_to_feather(df: pd.DataFrame,
     save df to feather files
     index_col stands for the index: needs to be reset when saving and put back when loading
     """
+    df = _coerce_to_df(df, label=file_name or key or "dataframe")
+    if df is None:
+        raise ValueError("No DataFrame to write")
+
     file_path = get_local_file_path(file_name=file_name,
                                     file_type=FileTypes.FEATHER,
                                     local_path=local_path,
@@ -587,6 +662,10 @@ def append_df_to_feather(df: pd.DataFrame,
     """
     append csv file
     """
+    df = _coerce_to_df(df, label=file_name or key or "dataframe")
+    if df is None:
+        raise ValueError("No DataFrame to append")
+
     # check if file exist
     file_path = get_local_file_path(file_name=file_name,
                                     file_type=FileTypes.FEATHER,
@@ -602,9 +681,6 @@ def append_df_to_feather(df: pd.DataFrame,
         df = pd.concat([old_df, df], axis=0)
         if keep is not None:
             df = df.loc[~df.index.duplicated(keep=keep)]
-
-    else:
-        pass
 
     save_df_to_feather(df=df,
                        file_name=file_name,
@@ -650,16 +726,20 @@ def save_df_dict_to_feather(dfs: Dict[Union[str, Enum, NamedTuple], pd.DataFrame
     """
     pandas dict to csv files
     """
-    for key, df in dfs.items():
-        if df is not None and isinstance(df, pd.DataFrame):
-            file_path = get_local_file_path(file_name=file_name,
-                                            file_type=FileTypes.FEATHER,
-                                            local_path=local_path,
-                                            folder_name=folder_name,
-                                            key=key)
-            if index_col not in df.columns:
-                df = df.reset_index(names=index_col)
-            df.to_feather(path=file_path)
+    for raw_key, obj in dfs.items():
+        df = _coerce_to_df(obj, str(raw_key))
+        if df is None:
+            continue
+        file_path = get_local_file_path(file_name=file_name,
+                                        file_type=FileTypes.FEATHER,
+                                        local_path=local_path,
+                                        folder_name=folder_name,
+                                        key=raw_key)
+        if index_col is not None and index_col not in df.columns:
+            df = df.reset_index(names=index_col)
+        else:
+            df = df.reset_index(drop=True)
+        df.to_feather(path=file_path)
 
 
 def load_df_dict_from_feather(dataset_keys: List[Union[str, Enum, NamedTuple]],
@@ -710,6 +790,10 @@ def save_df_to_parquet(df: pd.DataFrame,
     """
     pandas to parquet
     """
+    df = _coerce_to_df(df, label=file_name or key or "dataframe")
+    if df is None:
+        raise ValueError("No DataFrame to write")
+
     file_path = get_local_file_path(file_name=file_name,
                                     file_type=FileTypes.PARQUET,
                                     local_path=local_path,
@@ -753,16 +837,18 @@ def save_df_dict_to_parquet(datasets: Dict[Union[str, Enum, NamedTuple], pd.Data
     """
     pandas dict to parquet files
     """
-    for key, data in datasets.items():
-        if data is not None:
-            file_path = get_local_file_path(file_name=file_name,
-                                            file_type=FileTypes.PARQUET,
-                                            local_path=local_path,
-                                            folder_name=folder_name,
-                                            key=key)
-            if delocalize:
-                data = delocalize_df(data)
-            data.to_parquet(path=file_path)
+    for raw_key, obj in datasets.items():
+        df = _coerce_to_df(obj, str(raw_key))
+        if df is None:
+            continue
+        file_path = get_local_file_path(file_name=file_name,
+                                        file_type=FileTypes.PARQUET,
+                                        local_path=local_path,
+                                        folder_name=folder_name,
+                                        key=raw_key)
+        if delocalize:
+            df = delocalize_df(df)
+        df.to_parquet(path=file_path)
 
 
 def load_df_dict_from_parquet(dataset_keys: List[Union[str, Enum, NamedTuple]],
