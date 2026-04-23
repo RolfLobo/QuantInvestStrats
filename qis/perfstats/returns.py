@@ -1150,3 +1150,25 @@ def implied_leverage(levered_returns: Union[pd.Series, pd.DataFrame],
         )
 
     raise TypeError(f"levered_returns must be Series or DataFrame, got {type(levered_returns)}")
+
+
+def to_quarterly_returns(returns: Union[pd.Series, pd.DataFrame]) -> Union[pd.Series, pd.DataFrame]:
+    """Compound returns to quarter-end via NAV round-trip.
+
+    Drops any trailing partial quarter: if the input series' last observation
+    is before the final quarter-end, that quarter's return is set to NaN
+    (not a truncated 1- or 2-month return). This matters at the current
+    quarter boundary where monthly-reporting funds have posted Jan/Feb
+    returns but not yet the full Q1 -- without this drop, the backfill would
+    propagate a 2-month-masquerading-as-3-month return to downstream
+    regression synthesis.
+
+    Used uniformly across all funds for schema consistency; for series that
+    are already quarterly, this is effectively identity (single-obs quarters
+    compound to themselves).
+    """
+    q_returns = to_returns(returns_to_nav(returns), freq='QE')
+    # Quarters whose QE row is absent from the input are partial -- drop them.
+    input_valid_on_qe = returns.reindex(q_returns.index).notna()
+    q_returns = q_returns.where(input_valid_on_qe, other=float('nan'))
+    return q_returns

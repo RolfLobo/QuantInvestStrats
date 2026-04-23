@@ -5,7 +5,8 @@ from enum import Enum
 
 from qis.perfstats.returns import (to_zero_first_nonnan_returns, returns_to_nav, compute_sampled_vols,
                                    adjust_navs_to_portfolio_pa, compute_net_navs_ex_perf_man_fees,
-                                   compute_asset_returns_dict)
+                                   compute_asset_returns_dict,
+                                   to_quarterly_returns)
 
 
 class LocalTests(Enum):
@@ -15,6 +16,7 @@ class LocalTests(Enum):
     NET_RETURN = 4
     ROLLING_RETURNS = 5
     ASSET_RETURNS_DICT = 6
+    QUARTERLY_RETURNS = 7
 
 
 def run_local_test(local_test: LocalTests):
@@ -124,9 +126,15 @@ def run_local_test(local_test: LocalTests):
             navs = returns_to_nav(returns_df, init_period=1)
             print(f"\n{freq} frequency NAVs tail:\n{navs.tail()}")
 
+    elif local_test == LocalTests.QUARTERLY_RETURNS:
+        idx = pd.date_range('2023-01-31', '2024-03-31', freq='ME')
+        df = pd.DataFrame({'fund_a': 0.01, 'fund_b': 0.01}, index=idx)
+        df.loc['2024-03-31', 'fund_b'] = np.nan  # fund_b ends Feb 2024
+        print(to_quarterly_returns(df))
+
     plt.show()
 
 
 if __name__ == '__main__':
 
-    run_local_test(local_test=LocalTests.ASSET_RETURNS_DICT)
+    run_local_test(local_test=LocalTests.QUARTERLY_RETURNS)

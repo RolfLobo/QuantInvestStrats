@@ -87,7 +87,8 @@ from qis.perfstats.returns import (
     df_price_ffill_between_nans,
     delever_returns,
     lever_returns,
-    implied_leverage
+    implied_leverage,
+    to_quarterly_returns
 )
 
 from qis.perfstats.timeseries_bfill import (
