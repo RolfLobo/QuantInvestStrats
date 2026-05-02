@@ -1,7 +1,6 @@
 """
 common numpy operations
 """
-import time
 import numpy as np
 import pandas as pd
 from enum import Enum
@@ -30,6 +29,35 @@ def np_apply_along_axis(func, axis: int, a: np.ndarray) -> np.ndarray:
 
 
 @njit
+def _nan_apply_along_axis_2d(func, axis: int, a: np.ndarray) -> np.ndarray:
+    """
+    Like np_apply_along_axis, but returns NaN for all-NaN slices instead of
+    calling `func` on them. Avoids 'Degrees of freedom <= 0' and 'Mean of
+    empty slice' RuntimeWarnings from np.nanvar/np.nanstd/np.nanmean.
+    """
+    assert a.ndim == 2
+    assert axis in [0, 1]
+
+    if axis == 0:
+        result = np.zeros((1, a.shape[1]))
+        for i in range(a.shape[1]):
+            col = a[:, i]
+            if np.all(np.isnan(col)):
+                result[0, i] = np.nan
+            else:
+                result[0, i] = func(col)
+    else:  # axis=1 with keep dims
+        result = np.zeros((a.shape[0], 1))
+        for i in range(a.shape[0]):
+            row = a[i, :]
+            if np.all(np.isnan(row)):
+                result[i] = np.nan
+            else:
+                result[i] = func(row)
+    return result
+
+
+@njit
 def np_min(a: np.ndarray, axis: int = 1) -> np.ndarray:
     """
     min of 2-d array along axis
@@ -42,7 +70,7 @@ def np_nanmean(a: np.ndarray, axis: int = 1) -> np.ndarray:
     """
     nanmean of 2-d array along axis
     """
-    return np_apply_along_axis(func=np.nanmean, axis=axis, a=a)
+    return _nan_apply_along_axis_2d(func=np.nanmean, axis=axis, a=a)
 
 
 @njit
@@ -62,7 +90,7 @@ def np_nanstd(a: np.ndarray, axis: int = 1, ddof: int = 1) -> np.ndarray:
     """
     nan std of 2-d array along axis
     """
-    avg_std = np_apply_along_axis(func=np.nanstd, axis=axis, a=a)
+    avg_std = _nan_apply_along_axis_2d(func=np.nanstd, axis=axis, a=a)
     if ddof == 1:  # numbda does not recognise ddof as param to nanstd
         n = np_apply_along_axis(func=np.count_nonzero, axis=axis, a=~np.isnan(a))
         avg_std = np.where(n > 1, avg_std*np.sqrt(n / (n - 1.0)), np.nan)
@@ -74,7 +102,7 @@ def np_nanvar(a: np.ndarray, axis: int = 1, ddof: int = 0) -> np.ndarray:
     """
     nan std of 2-d array along axis
     """
-    avg_var = np_apply_along_axis(func=np.nanvar, axis=axis, a=a)
+    avg_var = _nan_apply_along_axis_2d(func=np.nanvar, axis=axis, a=a)
     if ddof == 1:  # numbda does not recognise ddof as param to nanstd
         n = np_apply_along_axis(func=np.count_nonzero, axis=axis, a=~np.isnan(a))
         avg_var = np.where(n > 1, avg_var*n / (n - 1.0), np.nan)
@@ -390,7 +418,9 @@ def compute_expanding_power(n: int, power_lambda: float, reverse_columns: bool =
 
 def running_mean(x: np.ndarray, n: int, fill_value: float = np.nan) -> np.ndarray:
     x = to_finite_np(data=x, fill_value=fill_value)
-    rolling_s = pd.Series(x).rolling(n, min_periods=0).apply(lambda x: np.nanmean(x))
+    # Use pandas built-in .mean() (faster than .apply(lambda) and avoids
+    # 'Mean of empty slice' warnings from all-NaN prefix windows).
+    rolling_s = pd.Series(x).rolling(n, min_periods=1).mean()
     rolling_s = rolling_s.ffill()  # when x has sequence of nans longer than n
     return rolling_s.to_numpy()
 

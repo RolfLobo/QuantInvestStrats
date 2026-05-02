@@ -203,7 +203,7 @@ def run_local_test(local_test: LocalTests):
         df2 = _make_df(n=5, seed=1)
         df2.index = df1.index + pd.Timedelta(days=5)
         fu.save_df_to_csv(df=df1, file_name='t_csv_append', **_save_kwargs())
-        fu.append_df_to_csv(df=df2, file_name='t_csv_append', **_save_kwargs())
+        fu.update_df_in_csv(df=df2, file_name='t_csv_append', **_save_kwargs())
         loaded = fu.load_df_from_csv(file_name='t_csv_append',
                                      local_path=RESOURCE_PATH,
                                      folder_name=TEST_FOLDER)

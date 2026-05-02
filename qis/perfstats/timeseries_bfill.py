@@ -259,8 +259,7 @@ def df_fill_first_nan_by_cross_median(df: pd.DataFrame,
         merged_data.loc[its_first_nonnan_index:, column] = df.loc[its_first_nonnan_index:, column].to_numpy()
 
     # fillnans with ffill in data after
-    with pd.option_context("future.no_silent_downcasting", True):
-        merged_data = merged_data.ffill().infer_objects(copy=False)
+    merged_data = merged_data.ffill().infer_objects()
 
     return merged_data
 

@@ -3,7 +3,7 @@ import qis.local_path
 
 from qis.file_utils import (
     FileTypes,
-    append_df_to_csv,
+    update_df_in_csv,
     append_df_to_feather,
     save_figs_to_pdf,
     get_all_folder_files,
@@ -31,8 +31,7 @@ from qis.file_utils import (
     save_df_to_parquet,
     save_fig,
     save_figs,
-    timer,
-    check_df_for_duplicated_columns_index
+    timer
 )
 
 from qis.utils.__init__ import *

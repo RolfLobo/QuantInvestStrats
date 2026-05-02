@@ -146,7 +146,6 @@ futures_strats/
 my_projects/
 testing/
 get_local_keys.py
-read_qis_modules.py
 TODOs.md
 qis/examples/figures/perf1.PNG
 qis/examples/figures/perf2.PNG

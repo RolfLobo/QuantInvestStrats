@@ -268,17 +268,17 @@ class TestCsv:
         df1 = df.iloc[:5]
         df2 = df.iloc[5:]
         fu.save_df_to_csv(df=df1, file_name='t', local_path=str(tmp_path))
-        fu.append_df_to_csv(df=df2, file_name='t', local_path=str(tmp_path))
+        fu.update_df_in_csv(df=df2, file_name='t', local_path=str(tmp_path))
         loaded = fu.load_df_from_csv(file_name='t', local_path=str(tmp_path))
         assert len(loaded) == len(df)
 
     def test_append_none_raises(self, tmp_path):
         with pytest.raises(ValueError, match='No DataFrame'):
-            fu.append_df_to_csv(df=None, file_name='t', local_path=str(tmp_path))
+            fu.update_df_in_csv(df=None, file_name='t', local_path=str(tmp_path))
 
     def test_append_with_keep_drops_duplicates(self, tmp_path, df):
         fu.save_df_to_csv(df=df, file_name='t', local_path=str(tmp_path))
-        fu.append_df_to_csv(df=df, file_name='t', local_path=str(tmp_path), keep='first')
+        fu.update_df_in_csv(df=df, file_name='t', local_path=str(tmp_path), keep='first')
         loaded = fu.load_df_from_csv(file_name='t', local_path=str(tmp_path))
         assert len(loaded) == len(df)
 

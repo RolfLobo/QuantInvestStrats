@@ -15,7 +15,6 @@ POSTGRES:
 """
 import os
 import functools
-import platform
 import time
 import warnings
 import numpy as np
@@ -27,7 +26,7 @@ from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union, Lit
 from matplotlib.backends.backend_pdf import PdfPages
 from enum import Enum
 
-from qis.local_path import get_paths
+from qis.local_path import get_paths, get_resource_path, get_output_path
 
 
 """"
@@ -54,6 +53,7 @@ class FileTypes(FileData, Enum):
     EPS = FileData(extension='.eps', folder='figures')
     SVG = FileData(extension='.svg', folder='figures')
     CSV = FileData(extension='.csv', folder='csv')
+    CSV_GZ = FileData(extension='.csv.gz', folder='csv')
     FEATHER = FileData(extension='.feather', folder='feather')
     EXCEL = FileData(extension='.xlsx', folder='excel')
     PPTX = FileData(extension='.pptx', folder='pptx')
@@ -63,49 +63,6 @@ class FileTypes(FileData, Enum):
     PARQUET = FileData(extension='.parquet', folder='parquet')
     ZIP = FileData(extension='.zip', folder=None)
     HTML = FileData(extension='.html', folder=None)
-
-
-class PathData(NamedTuple):
-    platform: str
-    path: str
-
-
-class ResourcePath(PathData, Enum):
-    """
-    specify window and lynox local paths to read resourse files
-    """
-    WINDOWS = PathData(platform='Windows', path=RESOURCE_PATH)
-    LINUX = PathData(platform='Linux', path=RESOURCE_PATH)
-
-
-class OutputPath(PathData, Enum):
-    """
-    specify window and lynox local paths for outputs
-    """
-    WINDOWS = PathData(platform='Windows', path=OUTPUT_PATH)
-    LINUX = PathData(platform='Linux', path=OUTPUT_PATH)
-
-
-def get_output_path() -> str:
-    """
-    platform dependent output path
-    """
-    run_platform = platform.system()
-    path_data = next((item for item in OutputPath if item.value.platform == run_platform), None)
-    if path_data is None:
-        raise TypeError(f"unknown platform {run_platform}")
-    return path_data.path
-
-
-def get_resource_path() -> str:
-    """
-    platform dependent resourse path
-    """
-    run_platform = platform.system()
-    path_data = next((item for item in ResourcePath if item.value.platform == run_platform), None)
-    if path_data is None:
-        raise TypeError(f"unknown platform {run_platform}")
-    return path_data.path
 
 
 def join_file_name_parts(parts: List[str]) -> str:
@@ -450,11 +407,14 @@ def save_df_to_csv(df: pd.DataFrame,
                    folder_name: str = None,
                    key: str = None,
                    add_current_date: bool = False,
-                   local_path: Optional[str] = None
+                   local_path: Optional[str] = None,
+                   file_type: FileTypes = FileTypes.CSV
                    ) -> None:
     """
     pandas to csv
     """
+    if file_type not in (FileTypes.CSV, FileTypes.CSV_GZ):
+        raise ValueError(f"file_type must be CSV or CSV_GZ, got {file_type}")
     df = _coerce_to_df(df, label=file_name or key or "dataframe")
     if df is None:
         raise ValueError("No DataFrame to write")
@@ -463,7 +423,7 @@ def save_df_to_csv(df: pd.DataFrame,
         file_name = f"{file_name}_{pd.Timestamp.now().strftime(DATE_FORMAT)}"
 
     file_path = get_local_file_path(file_name=file_name,
-                                    file_type=FileTypes.CSV,
+                                    file_type=file_type,
                                     local_path=local_path,
                                     folder_name=folder_name,
                                     key=key)
@@ -478,13 +438,16 @@ def load_df_from_csv(file_name: Optional[str] = None,
                      parse_dates: bool = True,
                      dayfirst: Optional[bool] = None,
                      tz: str = None,
-                     drop_duplicated: bool = False
+                     drop_duplicated: bool = False,
+                     file_type: FileTypes = FileTypes.CSV
                      ) -> pd.DataFrame:
     """
     pandas from csv
     """
+    if file_type not in (FileTypes.CSV, FileTypes.CSV_GZ):
+        raise ValueError(f"file_type must be CSV or CSV_GZ, got {file_type}")
     file_path = get_local_file_path(file_name=file_name,
-                                    file_type=FileTypes.CSV,
+                                    file_type=file_type,
                                     local_path=local_path,
                                     folder_name=folder_name,
                                     key=key)
@@ -520,23 +483,26 @@ def load_df_from_csv(file_name: Optional[str] = None,
     return df
 
 
-def append_df_to_csv(df: pd.DataFrame,
+def update_df_in_csv(df: pd.DataFrame,
                      file_name: str = None,
                      folder_name: str = None,
                      key: str = None,
                      local_path: Optional[str] = None,
-                     keep: Optional[Literal['first', 'last']] = None
+                     keep: Optional[Literal['first', 'last']] = None,
+                     file_type: FileTypes = FileTypes.CSV
                      ) -> None:
     """
     append csv file
     """
+    if file_type not in (FileTypes.CSV, FileTypes.CSV_GZ):
+        raise ValueError(f"file_type must be CSV or CSV_GZ, got {file_type}")
     df = _coerce_to_df(df, label=file_name or key or "dataframe")
     if df is None:
         raise ValueError("No DataFrame to append")
 
     # check if file exist
     file_path = get_local_file_path(file_name=file_name,
-                                    file_type=FileTypes.CSV,
+                                    file_type=file_type,
                                     local_path=local_path,
                                     folder_name=folder_name,
                                     key=key)
@@ -544,7 +510,8 @@ def append_df_to_csv(df: pd.DataFrame,
         old_df = load_df_from_csv(file_name=file_name,
                                   local_path=local_path,
                                   folder_name=folder_name,
-                                  key=key)
+                                  key=key,
+                                  file_type=file_type)
         df = pd.concat([old_df, df], axis=0)
         if keep is not None:
             df = df.loc[~df.index.duplicated(keep=keep)]
@@ -553,18 +520,30 @@ def append_df_to_csv(df: pd.DataFrame,
                    file_name=file_name,
                    folder_name=folder_name,
                    key=key,
-                   local_path=local_path)
+                   local_path=local_path,
+                   file_type=file_type)
+
+
+def append_df_to_csv(*args, **kwargs):
+    """Deprecated: use update_df_in_csv."""
+    import warnings
+    warnings.warn("append_df_to_csv is deprecated; use update_df_in_csv",
+                  DeprecationWarning, stacklevel=2)
+    return update_df_in_csv(*args, **kwargs)
 
 
 def save_df_dict_to_csv(datasets: Dict[Union[str, Enum, NamedTuple], pd.DataFrame],
                         file_name: Optional[str] = None,
                         local_path: Optional[str] = None,
                         folder_name: str = None,
-                        add_current_date: bool = False
+                        add_current_date: bool = False,
+                        file_type: FileTypes = FileTypes.CSV
                         ) -> None:
     """
     pandas dict to csv files
     """
+    if file_type not in (FileTypes.CSV, FileTypes.CSV_GZ):
+        raise ValueError(f"file_type must be CSV or CSV_GZ, got {file_type}")
     if add_current_date:
         file_name = f"{file_name}_{pd.Timestamp.now().strftime(DATE_FORMAT)}"
 
@@ -573,7 +552,7 @@ def save_df_dict_to_csv(datasets: Dict[Union[str, Enum, NamedTuple], pd.DataFram
         if df is None:
             continue
         file_path = get_local_file_path(file_name=file_name,
-                                        file_type=FileTypes.CSV,
+                                        file_type=file_type,
                                         local_path=local_path,
                                         folder_name=folder_name,
                                         key=raw_key)
@@ -587,15 +566,18 @@ def load_df_dict_from_csv(dataset_keys: List[Union[str, Enum, NamedTuple]],
                           is_index: bool = True,
                           dayfirst: Optional[bool] = None,  # will give priority to formats where day come first
                           force_not_found_error: bool = False,
+                          file_type: FileTypes = FileTypes.CSV
                           ) -> Dict[str, pd.DataFrame]:
     """
     pandas dict from csv files
     """
+    if file_type not in (FileTypes.CSV, FileTypes.CSV_GZ):
+        raise ValueError(f"file_type must be CSV or CSV_GZ, got {file_type}")
     index_col = 0 if is_index else None
     pandas_dict = {}
     for key in dataset_keys:
         file_path = get_local_file_path(file_name=file_name,
-                                        file_type=FileTypes.CSV,
+                                        file_type=file_type,
                                         local_path=local_path,
                                         folder_name=folder_name,
                                         key=key)
@@ -985,22 +967,3 @@ def save_figs_to_pdf(figs: Union[List[plt.Figure], Dict[str, plt.Figure]],
     print(f"""<a href=r"{file_path}">link</a>""")
     print(f"created PDF doc: {file_path}")
     return file_path
-
-
-def check_df_for_duplicated_columns_index(df: pd.DataFrame) -> bool:
-    # Check for duplicated columns
-    duplicated_columns = df.columns[df.columns.duplicated()].tolist()
-    if duplicated_columns:
-        unique_dupes = list(set(duplicated_columns))
-        raise AssertionError(
-            f"Found {len(duplicated_columns)} duplicated column(s): {unique_dupes}"
-        )
-
-    # Check for duplicated index
-    duplicated_index = df.index[df.index.duplicated()].tolist()
-    if duplicated_index:
-        unique_dupes = list(set(duplicated_index))
-        raise AssertionError(
-            f"Found {len(duplicated_index)} duplicated index value(s): {unique_dupes}"
-        )
-    return True

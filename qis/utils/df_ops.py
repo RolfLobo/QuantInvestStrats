@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from typing import Union, List, Optional, Dict, Tuple, Type, Any, Literal
-from enum import Enum
 # qis
 import qis.utils.np_ops as npo
 
@@ -556,3 +555,22 @@ def df_align_to_common_index(df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.D
     df1 = df1.loc[common_index]
     df2 = df2.loc[common_index]
     return df1, df2
+
+
+def check_df_for_duplicated_columns_index(df: pd.DataFrame) -> bool:
+    # Check for duplicated columns
+    duplicated_columns = df.columns[df.columns.duplicated()].tolist()
+    if duplicated_columns:
+        unique_dupes = list(set(duplicated_columns))
+        raise AssertionError(
+            f"Found {len(duplicated_columns)} duplicated column(s): {unique_dupes}"
+        )
+
+    # Check for duplicated index
+    duplicated_index = df.index[df.index.duplicated()].tolist()
+    if duplicated_index:
+        unique_dupes = list(set(duplicated_index))
+        raise AssertionError(
+            f"Found {len(duplicated_index)} duplicated index value(s): {unique_dupes}"
+        )
+    return True
