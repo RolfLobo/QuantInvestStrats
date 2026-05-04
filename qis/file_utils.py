@@ -15,6 +15,7 @@ POSTGRES:
 """
 import os
 import functools
+import platform
 import time
 import warnings
 import numpy as np
@@ -96,6 +97,10 @@ def get_local_file_path(file_name: Optional[str],
     if local_path in not None and file_name is None and key is not None and file_type is passed: file_path=local_path//key+file_type.value
     if local_path in not None and file_name and key and file_type is passed: file_path=local_path//file_name_key+file_type.value
     """
+
+    # explicit local_path=None falls back to caller's current working directory
+    if local_path is None:
+        local_path = ''
 
     if local_path is not None and folder_name is not None:
         local_path = join(local_path, folder_name)
@@ -492,13 +497,15 @@ def update_df_in_csv(df: pd.DataFrame,
                      file_type: FileTypes = FileTypes.CSV
                      ) -> None:
     """
-    append csv file
+    update csv file with new rows: if the file exists, load the existing data,
+    concatenate with `df`, optionally drop duplicate index entries via `keep`,
+    and rewrite the file. If the file does not exist, write `df` as new file.
     """
     if file_type not in (FileTypes.CSV, FileTypes.CSV_GZ):
         raise ValueError(f"file_type must be CSV or CSV_GZ, got {file_type}")
     df = _coerce_to_df(df, label=file_name or key or "dataframe")
     if df is None:
-        raise ValueError("No DataFrame to append")
+        raise ValueError("No DataFrame to update")
 
     # check if file exist
     file_path = get_local_file_path(file_name=file_name,
@@ -522,14 +529,6 @@ def update_df_in_csv(df: pd.DataFrame,
                    key=key,
                    local_path=local_path,
                    file_type=file_type)
-
-
-def append_df_to_csv(*args, **kwargs):
-    """Deprecated: use update_df_in_csv."""
-    import warnings
-    warnings.warn("append_df_to_csv is deprecated; use update_df_in_csv",
-                  DeprecationWarning, stacklevel=2)
-    return update_df_in_csv(*args, **kwargs)
 
 
 def save_df_dict_to_csv(datasets: Dict[Union[str, Enum, NamedTuple], pd.DataFrame],
@@ -967,3 +966,22 @@ def save_figs_to_pdf(figs: Union[List[plt.Figure], Dict[str, plt.Figure]],
     print(f"""<a href=r"{file_path}">link</a>""")
     print(f"created PDF doc: {file_path}")
     return file_path
+
+
+def check_df_for_duplicated_columns_index(df: pd.DataFrame) -> bool:
+    # Check for duplicated columns
+    duplicated_columns = df.columns[df.columns.duplicated()].tolist()
+    if duplicated_columns:
+        unique_dupes = list(set(duplicated_columns))
+        raise AssertionError(
+            f"Found {len(duplicated_columns)} duplicated column(s): {unique_dupes}"
+        )
+
+    # Check for duplicated index
+    duplicated_index = df.index[df.index.duplicated()].tolist()
+    if duplicated_index:
+        unique_dupes = list(set(duplicated_index))
+        raise AssertionError(
+            f"Found {len(duplicated_index)} duplicated index value(s): {unique_dupes}"
+        )
+    return True
