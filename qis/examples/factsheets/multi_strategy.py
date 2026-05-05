@@ -1,5 +1,10 @@
 """
-multi strategy backtest is generated using same strategy with a set of different model parameters
+Multi-strategy factsheet from a parameter sweep of a single strategy.
+
+Backtests the same vol-parity strategy across several spans, wraps the
+results into a ``MultiPortfolioData``, and renders
+``qis.generate_multi_portfolio_factsheet`` to compare strategies
+side by side. Useful for illustrating sensitivity to a single parameter.
 """
 # packages
 import pandas as pd

@@ -1,3 +1,11 @@
+"""
+Strategy factsheet on a vol-parity multi-asset portfolio.
+
+Builds equal-vol weights across SPY/QQQ/EEM/TLT/IEF/LQD/HYG/GLD via
+``qis.compute_ra_returns`` at a 15% vol target, backtests with
+``qis.backtest_model_portfolio``, and renders the full strategy
+factsheet via ``qis.generate_strategy_factsheet``.
+"""
 import numpy as np
 import pandas as pd
 from typing import Tuple, List

@@ -1,6 +1,11 @@
 """
-example of using strategy construction and reporting vs benchmark
-for implementation see portfolio.report.strategy_factsheet
+Strategy-vs-benchmark factsheet using ``generate_strategy_benchmark_factsheet_plt``.
+
+Builds a vol-parity strategy with a rolling-EWMA covariance estimator and
+compares it to a 60/40 benchmark. Shows attribution, tracking error,
+regime-conditional stats, and active risk decomposition.
+
+Implementation reference: ``qis.portfolio.reports.strategy_factsheet``.
 """
 # packages
 import pandas as pd

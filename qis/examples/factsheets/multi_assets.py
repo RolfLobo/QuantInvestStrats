@@ -1,7 +1,10 @@
 """
-performance report for a universe of several assets
-with comparison to 1-2 benchmarks
-output is one-page figure with key numbers
+Multi-asset factsheet on an equity / bonds / credit / commodities universe.
+
+Demonstrates the canonical one-page factsheet output of
+``qis.generate_multi_asset_factsheet`` with 1–2 benchmarks: returns,
+rolling performance, drawdowns, regime-conditional stats, and pairwise
+correlation tables in one figure.
 """
 # packages
 import matplotlib.pyplot as plt

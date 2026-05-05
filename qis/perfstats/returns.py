@@ -1155,20 +1155,49 @@ def implied_leverage(levered_returns: Union[pd.Series, pd.DataFrame],
 def to_quarterly_returns(returns: Union[pd.Series, pd.DataFrame]) -> Union[pd.Series, pd.DataFrame]:
     """Compound returns to quarter-end via NAV round-trip.
 
-    Drops any trailing partial quarter: if the input series' last observation
-    is before the final quarter-end, that quarter's return is set to NaN
-    (not a truncated 1- or 2-month return). This matters at the current
-    quarter boundary where monthly-reporting funds have posted Jan/Feb
-    returns but not yet the full Q1 -- without this drop, the backfill would
-    propagate a 2-month-masquerading-as-3-month return to downstream
-    regression synthesis.
+    Masks any trailing partial quarter — i.e., a quarter whose end-of-quarter
+    date falls in a calendar month later than the input's last observed
+    month. This matters at the current quarter boundary where monthly-
+    reporting funds have posted Jan/Feb returns but not yet the full Q1 —
+    without this drop, the resample would forward-fill a 2-month return as
+    if it were a 3-month return.
+
+    The completeness check uses calendar months, not exact QE timestamps, so
+    weekly (W-FRI) and business-month-end series compound correctly even
+    though their stamps don't land on calendar quarter-end dates. (A previous
+    implementation used ``returns.reindex(QE).notna()``, which silently
+    masked the entire output for any input whose stamps did not align with
+    calendar QE.)
 
     Used uniformly across all funds for schema consistency; for series that
     are already quarterly, this is effectively identity (single-obs quarters
     compound to themselves).
     """
     q_returns = to_returns(returns_to_nav(returns), freq='QE')
-    # Quarters whose QE row is absent from the input are partial -- drop them.
-    input_valid_on_qe = returns.reindex(q_returns.index).notna()
-    q_returns = q_returns.where(input_valid_on_qe, other=float('nan'))
+
+    # Per column, find the last observed month-end. A quarter ending at QE
+    # is complete iff the input has at least one non-NaN observation in that
+    # quarter's last calendar month — equivalently, QE <= (last_dt rounded
+    # forward to month-end).
+    def _last_complete_month_end(s: pd.Series):
+        clean = s.dropna()
+        if clean.empty:
+            return None
+        return clean.index.max() + pd.offsets.MonthEnd(0)
+
+    if isinstance(returns, pd.Series):
+        last_me = _last_complete_month_end(returns)
+        if last_me is None:
+            q_returns[:] = float('nan')
+        else:
+            q_returns = q_returns.where(q_returns.index <= last_me,
+                                        other=float('nan'))
+    else:  # DataFrame — compute per column to handle ragged end dates
+        for col in returns.columns:
+            last_me = _last_complete_month_end(returns[col])
+            if last_me is None:
+                q_returns[col] = float('nan')
+            else:
+                q_returns.loc[q_returns.index > last_me, col] = float('nan')
+
     return q_returns

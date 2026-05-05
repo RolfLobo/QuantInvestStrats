@@ -44,10 +44,25 @@ dependency path increasing sequentially as follows.
 Function ```backtest_model_portfolio()```  in ```qis.portfolio.backtester.py``` takes instrument prices 
 and simulated weights from a generic strategy and compute the total return, performance attribution, and risk analysis
 
-```qis.examples``` contains scripts with illustrations of QIS analytics.
+```qis.examples``` contains runnable scripts showcasing the analytics, organised by sub-package:
 
-```qis.examples.factheets``` contains scripts with examples of factsheets for simulated and actual strategies,
-and cross-sectional analysis of backtests.
+* ```qis.examples.perfstats``` — performance metrics on price series: quickstart usage, Sharpe vs Sortino across return frequencies, rolling performance, bond-ETF risk/return frontier, multi-figure performance reports, miss-best-worst-days impact, infrequent-returns interpolation, and an end-to-end de-levering / unsmoothing walkthrough on a bundled BDC vs private-credit dataset.
+
+* ```qis.examples.models``` — numba-vs-pandas EWM kernel benchmarks, multivariate EWM linear factor models, multivariate OLS, EWM correlation tables, OHLC realised-volatility estimators, intraday/overnight return decomposition, rolling correlations, and block bootstrap of price paths.
+
+* ```qis.examples.regimes``` — regime-conditional analytics: bull/bear/normal Sharpe attribution, conditional return boxplots by VIX regime, calendar-month seasonality, US election regime study.
+
+* ```qis.examples.portfolios``` — backtests using ```backtest_model_portfolio```: balanced 60/40 with and without a BTC sleeve, constant-notional short, leveraged-ETF combinations, long/short pairs, and vol-target / trend-following parameter sweeps.
+
+* ```qis.examples.factsheets``` — full multi-page factsheets for simulated and actual strategies, cross-sectional asset-class comparisons, multi-strategy parameter sweeps, and optional pybloqs-rendered variants.
+
+* ```qis.examples.plots``` — plotting primitives showcase: dual-axis figures, scatter with regression diagnostics.
+
+* ```qis.examples.utils``` — date schedules and rolling calendars: option / futures roll generation via ```generate_fixed_maturity_rolls```.
+
+* ```qis.examples.case_studies``` — cross-cutting domain studies: VIX beta to equities and bonds, VIX term-structure correlation with SPX, conditional returns on the front-month short-VIX strategy, credit-spread regression vs equity / rates.
+
+A README inside ```qis/examples/``` lists every script with a one-line description; examples that need a Bloomberg terminal are flagged inline.
 
 
 # Table of contents
@@ -61,7 +76,7 @@ and cross-sectional analysis of backtests.
    5. [Multi strategy factsheet](#multistrategy)
    6. [Notebooks](#notebooks)
 4. [Contributions](#contributions)
-5. [Updates](#updates)
+5. [Changelog](#changelog)
 6. [ToDos](#todos)
 7. [Disclaimer](#disclaimer)
 
@@ -82,18 +97,26 @@ git clone https://github.com/ArturSepp/QuantInvestStrats.git
 ```
 
 Core dependencies:
-    python = ">=3.8",
-    numba = ">=0.56.4",
-    numpy = ">=1.22.4",
-    scipy = ">=1.10",
-    statsmodels = ">=0.13.5",
+    python = ">=3.10",
+    numba = ">=0.63.0",
+    numpy = ">=2.0",
+    scipy = ">=1.12.0",
+    statsmodels = ">=0.14.0",
     pandas = ">=2.2.0",
-    matplotlib = ">=3.2.2",
-    seaborn = ">=0.12.2"
+    matplotlib = ">=3.8.0",
+    seaborn = ">=0.13.0",
+    openpyxl = ">=3.1.0",
+    PyYAML = ">=6.0",
+    yfinance = ">=0.2.40",
+    pandas-datareader = ">=0.10.0"
+
+Python 3.14 is supported (numba 0.63+ ships cp314 wheels).
 
 Optional dependencies:
-    yfinance ">=0.1.38" (for getting test price data),
-    pybloqs ">=1.2.13" (for producing html and pdf factsheets)
+    pybloqs ">=1.2.13" (for producing html and pdf factsheets — install with `pip install qis[reports]`),
+    bbg-fetch ">=2.0.0" (third-party; for examples that pull data from a Bloomberg terminal)
+
+See `pyproject.toml` for the full list of optional extras (`reports`, `visualization`, `io`, `database`, `jupyter`, `dev`, `all`).
 
 
 ## **Examples** <a name="examples"></a>
@@ -243,36 +266,9 @@ There are a number of requirements:
 
 
 
-## **Updates** <a name="updates"></a>
+## **Changelog** <a name="changelog"></a>
 
-#### 30 December 2022,  Version 1.0.1 released
-
-#### 08 July 2023, Version 2.0.1 released
-
-Core Changes
-
-1. Portfolio optimization (qis.portfolio.optimisation) layer is removed with core
-functionality moved to a stand-alone Python package: Backtesting Optimal Portfolio (bop)
-    
-* This allows to remove the dependency from cvxpy and sklearn packages and 
-thus to simplify the dependency management for qis
-
-2.	Added factsheet reporting using pybloqs package https://github.com/man-group/PyBloqs
-* Pybloqs is a versatile tool to create customised reporting using Matplotlib figures and table
-and thus leveraging QIS visualisation analytics
-
-3. New factsheets are added
-* Examples are added for the four type of reports:
-    1. multi assets: report performance of several assets with goal of cross-sectional comparision:
-    see qis.examples.factsheets.multi_asset.py
-  2. strategy: report performance, risk, and trading statictics for either backtested or actual strategy
-    with strategy data passed as PortfolioData object: see qis.examples.factsheets.strategy.py
-  3. strategy vs benchmark: report performance and marginal comparison
-  of strategy vs a benchmark strategy (data for both are passed using individual PortfolioData object): 
-  see qis.examples.factsheets.strategy_benchmark.py
-  4. multi_strategy: report for a list of strategies with individual PortfolioData. This report is 
-  useful to examine the sensetivity of backtested strategy to a parameter or set of parameters: 
-  see qis.examples.factsheets.multi_strategy
+Release history is maintained in [CHANGELOG.md](CHANGELOG.md).
 
 
 ## **ToDos** <a name="todos"></a>

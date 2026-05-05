@@ -127,10 +127,30 @@ def run_local_test(local_test: LocalTests):
             print(f"\n{freq} frequency NAVs tail:\n{navs.tail()}")
 
     elif local_test == LocalTests.QUARTERLY_RETURNS:
+        # Case 1 (original): monthly input, fund_b ends Feb 2024 mid-Q1.
+        # Q1 2024 should be valid for fund_a, NaN for fund_b.
         idx = pd.date_range('2023-01-31', '2024-03-31', freq='ME')
         df = pd.DataFrame({'fund_a': 0.01, 'fund_b': 0.01}, index=idx)
         df.loc['2024-03-31', 'fund_b'] = np.nan  # fund_b ends Feb 2024
-        print(to_quarterly_returns(df))
+        print("Case 1 — monthly with fund_b ending mid-Q1:")
+        out1 = to_quarterly_returns(df)
+        print(out1)
+        assert pd.notna(out1.loc['2024-03-31', 'fund_a']), \
+            "fund_a Q1 2024 should be valid"
+        assert pd.isna(out1.loc['2024-03-31', 'fund_b']), \
+            "fund_b Q1 2024 should be NaN"
+
+        # Case 2 (regression): weekly W-FRI input. Stamps don't land on
+        # calendar QE dates — earlier ``returns.reindex(QE).notna()`` check
+        # masked everything. Should now produce a full quarterly history.
+        idx_wk = pd.date_range('2018-11-09', '2026-04-17', freq='W-FRI')
+        np.random.seed(0)
+        weekly = pd.Series(np.random.normal(0.001, 0.01, len(idx_wk)),
+                           index=idx_wk, name='weekly_fund')
+        out2 = to_quarterly_returns(weekly)
+        print(f"\nCase 2 — W-FRI weekly: {out2.notna().sum()} of {len(out2)} valid")
+        assert out2.notna().sum() >= 25, \
+            f"expected ~30 valid quarters from W-FRI, got {out2.notna().sum()}"
 
     plt.show()
 

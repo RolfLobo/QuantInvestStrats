@@ -966,22 +966,3 @@ def save_figs_to_pdf(figs: Union[List[plt.Figure], Dict[str, plt.Figure]],
     print(f"""<a href=r"{file_path}">link</a>""")
     print(f"created PDF doc: {file_path}")
     return file_path
-
-
-def check_df_for_duplicated_columns_index(df: pd.DataFrame) -> bool:
-    # Check for duplicated columns
-    duplicated_columns = df.columns[df.columns.duplicated()].tolist()
-    if duplicated_columns:
-        unique_dupes = list(set(duplicated_columns))
-        raise AssertionError(
-            f"Found {len(duplicated_columns)} duplicated column(s): {unique_dupes}"
-        )
-
-    # Check for duplicated index
-    duplicated_index = df.index[df.index.duplicated()].tolist()
-    if duplicated_index:
-        unique_dupes = list(set(duplicated_index))
-        raise AssertionError(
-            f"Found {len(duplicated_index)} duplicated index value(s): {unique_dupes}"
-        )
-    return True
